@@ -23,17 +23,17 @@ final class KeyerRenderer {
     }
 
     func render() {
-        guard keyer.isEnabled else {
-            outputTexture = nil
-            return
-        }
         guard pads.pads.indices.contains(keyer.foregroundPadIndex),
               pads.pads.indices.contains(keyer.backgroundPadIndex) else {
             outputTexture = nil
             return
         }
-        guard let fg = pads.pads[keyer.foregroundPadIndex].source?.currentTexture,
-              let bg = pads.pads[keyer.backgroundPadIndex].source?.currentTexture else {
+        // Reads pads[FG/BG].texture (FX-processed) so per-pad FX feeds into
+        // the keyer's input and chaining via pads sourced from another keyer
+        // works naturally — that pad's texture comes from the other keyer's
+        // previous-frame outputTexture, giving free 1-frame feedback.
+        guard let fg = pads.pads[keyer.foregroundPadIndex].texture,
+              let bg = pads.pads[keyer.backgroundPadIndex].texture else {
             return
         }
 

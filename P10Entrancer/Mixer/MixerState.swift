@@ -8,7 +8,7 @@ enum ActiveChannel: Int {
 
 enum ChannelSource: Equatable {
     case pad(Int)
-    case keyer
+    case keyer(Int) // 0 = Keyer 1, 1 = Keyer 2
 }
 
 enum OutputMode: Int, CaseIterable, Identifiable {
@@ -56,13 +56,13 @@ final class MixerState: ObservableObject {
     @Published var ch2Source: ChannelSource = .pad(1)
     @Published var activeChannel: ActiveChannel = .ch1
     @Published var transition: TransitionKind = .crossfade
-    @Published var position: Float = 0.5
+    @Published var position: Float = 0
     @Published var keyColor: SIMD3<Float> = .init(0, 1, 0)
     @Published var keyThreshold: Float = 0.35
     @Published var keySoftness: Float = 0.1
     @Published var inspectedPadIndex: Int = 0
     @Published var outputMode: OutputMode = .hd720p
-    @Published var masterVolume: Float = 0.7
+    @Published var masterVolume: Float = 0
 
     var ch1PadIndex: Int? {
         if case .pad(let i) = ch1Source { return i } else { return nil }
@@ -72,12 +72,12 @@ final class MixerState: ObservableObject {
         if case .pad(let i) = ch2Source { return i } else { return nil }
     }
 
-    var ch1IsKeyer: Bool {
-        if case .keyer = ch1Source { return true } else { return false }
+    var ch1KeyerIndex: Int? {
+        if case .keyer(let i) = ch1Source { return i } else { return nil }
     }
 
-    var ch2IsKeyer: Bool {
-        if case .keyer = ch2Source { return true } else { return false }
+    var ch2KeyerIndex: Int? {
+        if case .keyer(let i) = ch2Source { return i } else { return nil }
     }
 
     func routeActivePad(_ index: Int) {
@@ -87,10 +87,10 @@ final class MixerState: ObservableObject {
         }
     }
 
-    func routeKeyerTo(_ channel: ActiveChannel) {
+    func routeKeyerTo(_ channel: ActiveChannel, keyerIndex: Int = 0) {
         switch channel {
-        case .ch1: ch1Source = .keyer
-        case .ch2: ch2Source = .keyer
+        case .ch1: ch1Source = .keyer(keyerIndex)
+        case .ch2: ch2Source = .keyer(keyerIndex)
         }
     }
 

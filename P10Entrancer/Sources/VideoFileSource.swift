@@ -11,7 +11,7 @@ final class VideoFileSource: PadSource {
 
     let audioPlayer: PadAudioPlayer
 
-    private let url: URL
+    let url: URL
     private let context: MetalContext
     private var reader: AVAssetReader?
     private var output: AVAssetReaderTrackOutput?

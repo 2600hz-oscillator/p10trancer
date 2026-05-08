@@ -8,7 +8,7 @@ final class MasterMixerOffscreen: FrameRenderer {
     private let context = MetalContext.shared
     private let pads: PadSystem
     private let mixer: MixerState
-    private let keyer: KeyerRenderer
+    private let keyers: [KeyerRenderer]
     private let ntscPipeline: NTSCPipeline
     private let pipeline: MTLRenderPipelineState
     weak var recorder: MixerRecorder?
@@ -16,10 +16,10 @@ final class MasterMixerOffscreen: FrameRenderer {
     private var lastSize: (Int, Int) = (0, 0)
     private var renderTexture: MTLTexture?
 
-    init(pads: PadSystem, mixer: MixerState, keyer: KeyerRenderer, ntscPipeline: NTSCPipeline) throws {
+    init(pads: PadSystem, mixer: MixerState, keyers: [KeyerRenderer], ntscPipeline: NTSCPipeline) throws {
         self.pads = pads
         self.mixer = mixer
-        self.keyer = keyer
+        self.keyers = keyers
         self.ntscPipeline = ntscPipeline
         self.pipeline = try context.makePipeline(
             vertex: "mixerVertex",
@@ -36,7 +36,10 @@ final class MasterMixerOffscreen: FrameRenderer {
     }
 
     func render(frameIndex: UInt64, elapsedTime: CFTimeInterval) {
-        keyer.render()
+        // Fixed order: Keyer 1 then Keyer 2. If a keyer's FG/BG pad is
+        // sourced from another keyer, that pad's texture is the other
+        // keyer's previous-frame outputTexture, giving 1-frame feedback.
+        for keyer in keyers { keyer.render() }
 
         let canvasSize = mixer.outputMode.canvasSize
         if (canvasSize.width, canvasSize.height) != lastSize {
@@ -90,8 +93,9 @@ final class MasterMixerOffscreen: FrameRenderer {
         case .pad(let index):
             guard pads.pads.indices.contains(index) else { return nil }
             return pads.pads[index].texture
-        case .keyer:
-            return keyer.outputTexture
+        case .keyer(let i):
+            guard keyers.indices.contains(i) else { return nil }
+            return keyers[i].outputTexture
         }
     }
 

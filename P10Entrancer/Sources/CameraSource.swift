@@ -14,11 +14,13 @@ final class CameraSource: NSObject, PadSource {
     private let queue = DispatchQueue(label: "p10e.camera", qos: .userInitiated)
     private var textureCache: CVMetalTextureCache?
     private var retainedCVTexture: CVMetalTexture?
-    private let label: String
+    let label: String
+    let deviceID: String
 
     init?(device: AVCaptureDevice, label: String, context: MetalContext = .shared) {
         self.context = context
         self.label = label
+        self.deviceID = device.uniqueID
         super.init()
 
         var cache: CVMetalTextureCache?

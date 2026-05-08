@@ -69,6 +69,13 @@ final class LiveRecordingsStore: ObservableObject {
         selectedID = (selectedID == id) ? nil : id
     }
 
+    /// Clear the in-memory reel. Files on disk in Documents/UserVideos/ are
+    /// untouched. Used by "Reset to factory defaults" and END SESSION.
+    func clearRecent() {
+        recent.removeAll()
+        selectedID = nil
+    }
+
     private static func generateThumbnail(for url: URL) async -> UIImage? {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)

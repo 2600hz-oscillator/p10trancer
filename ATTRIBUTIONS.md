@@ -22,5 +22,5 @@ The 9 demo clips bundled in `P10Entrancer/Resources/TestAssets/` are sourced fro
 
 - All clips were re-encoded to H.264 480×270 with AAC mono audio (where audio existed) using `ffmpeg`. See `/tmp/p10e-clips/encode.sh` in dev for the exact transcoding command.
 - The original archive.org files are larger and at original resolution. Source files are not bundled — only the trimmed/scaled segments shipping in `TestAssets/`.
-- Mix recordings made by the user (via the REC button) are stored under `Documents/UserVideos/` in the app's sandbox and replace pad 1 on save.
+- Mix recordings made by the user (via the REC button) are stored under `Documents/UserVideos/` in the app's sandbox and appear in the Live Recordings reel; the user assigns them to pads from there.
 - Users can load arbitrary video files into any pad via the per-pad context menu (long-press → Load Video…). Those files live in `Documents/UserVideos/` and are licensed however the user obtained them.

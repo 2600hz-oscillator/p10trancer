@@ -3,16 +3,23 @@ import SwiftUI
 struct BottomControlBar: View {
     let pads: PadSystem
     @ObservedObject var mixer: MixerState
-    @ObservedObject var keyer: KeyerState
+    @ObservedObject var keyerSystem: KeyerSystem
     @ObservedObject var ntsc: NTSCState
     @ObservedObject var thermal: ThermalMonitor
     @ObservedObject var recorder: MixerRecorder
     @ObservedObject var automation: AutomationEngine
     @ObservedObject var liveRecordings: LiveRecordingsStore
+    @ObservedObject var sessions: SessionStore
+    var onEndSession: () -> Void
 
     @State private var showInspector = false
     @State private var showMixer = false
     @State private var showAutomation = false
+    @State private var showKeyerControls = false
+    @State private var showSession = false
+    @State private var endSessionAlertShown = false
+    @State private var showSaveBeforeEndAlert = false
+    @State private var endSessionSaveDraft: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,13 +31,46 @@ struct BottomControlBar: View {
         }
         .background(.black)
         .sheet(isPresented: $showInspector) {
-            InspectorSheet(pads: pads, mixer: mixer, keyer: keyer, ntsc: ntsc, thermal: thermal)
+            InspectorSheet(pads: pads, mixer: mixer, ntsc: ntsc, thermal: thermal)
         }
         .sheet(isPresented: $showMixer) {
             MixerPanelView(pads: pads, mixer: mixer)
         }
         .sheet(isPresented: $showAutomation) {
             AutomationPanelView(engine: automation)
+        }
+        .sheet(isPresented: $showKeyerControls) {
+            KeyerControlsView(system: keyerSystem, mixer: mixer)
+        }
+        .sheet(isPresented: $showSession) {
+            SessionPanelView(store: sessions)
+        }
+        .alert("End session?", isPresented: $endSessionAlertShown) {
+            Button("Cancel", role: .cancel) {}
+            if sessions.hasUnsavedChanges {
+                Button("Save & End") {
+                    endSessionSaveDraft = ""
+                    showSaveBeforeEndAlert = true
+                }
+                Button("End Without Saving", role: .destructive) { onEndSession() }
+            } else {
+                Button("End") { onEndSession() }
+            }
+        } message: {
+            Text(sessions.hasUnsavedChanges
+                 ? "You have unsaved changes. Save before ending?"
+                 : "Returns to the splash screen and stops cameras / MIDI / render.")
+        }
+        .alert("Save session before ending", isPresented: $showSaveBeforeEndAlert) {
+            TextField("Session name", text: $endSessionSaveDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save & End") {
+                let trimmed = endSessionSaveDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    _ = AppState.shared.saveCurrentSession(as: trimmed)
+                }
+                onEndSession()
+            }
         }
     }
 
@@ -76,13 +116,16 @@ struct BottomControlBar: View {
         HStack(spacing: 12) {
             hdmiBlock
             verticalDivider
-            keyerToggleBlock
+            keyerControlsButton
             verticalDivider
             ntscBlock
             verticalDivider
             mixerButton
             automationButton
             inspectButton
+            sessionButton
+            verticalDivider
+            endSessionButton
             Spacer(minLength: 8)
             automationStatus
             thermalIndicator
@@ -90,6 +133,28 @@ struct BottomControlBar: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .frame(height: 70)
+    }
+
+    private var sessionButton: some View {
+        Button(action: { showSession = true }) {
+            Text("SESSION…")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.purple, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var endSessionButton: some View {
+        Button(action: { endSessionAlertShown = true }) {
+            Text("END SESSION")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.red, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private var channelBlock: some View {
@@ -105,7 +170,7 @@ struct BottomControlBar: View {
         let sub: String
         switch source {
         case .pad(let i): sub = "PAD \(i + 1)"
-        case .keyer: sub = "KEYER"
+        case .keyer(let i): sub = "KEY\(i + 1)"
         }
         return Button(action: { mixer.activeChannel = channel }) {
             VStack(spacing: 2) {
@@ -183,16 +248,13 @@ struct BottomControlBar: View {
         .buttonStyle(.plain)
     }
 
-    private var keyerToggleBlock: some View {
-        Button(action: { keyer.isEnabled.toggle() }) {
-            HStack(spacing: 4) {
-                Circle().fill(keyer.isEnabled ? Color.green : Color.white.opacity(0.3)).frame(width: 8, height: 8)
-                Text("KEYER")
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(.white)
-            }
-            .padding(.horizontal, 10).padding(.vertical, 4)
-            .overlay(Rectangle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
+    private var keyerControlsButton: some View {
+        Button(action: { showKeyerControls = true }) {
+            Text("KEYER CONTROLS…")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.green, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -281,7 +343,6 @@ struct BottomControlBar: View {
 private struct InspectorSheet: View {
     let pads: PadSystem
     @ObservedObject var mixer: MixerState
-    @ObservedObject var keyer: KeyerState
     @ObservedObject var ntsc: NTSCState
     @ObservedObject var thermal: ThermalMonitor
     @Environment(\.dismiss) private var dismiss
@@ -299,7 +360,6 @@ private struct InspectorSheet: View {
                         .font(.system(size: 11, weight: .heavy, design: .monospaced))
                         .foregroundStyle(.white)
                 }
-                keyerSection
                 if mixer.outputMode == .ntsc4_3 { ntscSection }
                 fxSection
                 Spacer()
@@ -320,31 +380,6 @@ private struct InspectorSheet: View {
                 }
             case .failure(let error):
                 P10Logger.log("[InspectorSheet] file import failed: \(error)")
-            }
-        }
-    }
-
-    private var keyerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("KEYER")
-            HStack {
-                Toggle(isOn: $keyer.isEnabled) {
-                    Text("Enabled").font(.system(size: 12, design: .monospaced)).foregroundStyle(.white)
-                }
-                .toggleStyle(.switch).tint(.green)
-                Spacer()
-                Button("→ CH1") { mixer.routeKeyerTo(.ch1) }.buttonStyle(.bordered).tint(.cyan)
-                Button("→ CH2") { mixer.routeKeyerTo(.ch2) }.buttonStyle(.bordered).tint(.orange)
-            }
-            if keyer.isEnabled {
-                padPicker("FG", $keyer.foregroundPadIndex)
-                padPicker("BG", $keyer.backgroundPadIndex)
-                Picker("Kind", selection: $keyer.kind) {
-                    ForEach(KeyerKind.allCases) { Text($0.displayName).tag($0) }
-                }
-                .pickerStyle(.segmented).colorScheme(.dark)
-                slider("Threshold", $keyer.threshold, in: 0...1)
-                slider("Softness", $keyer.softness, in: 0.001...0.5)
             }
         }
     }

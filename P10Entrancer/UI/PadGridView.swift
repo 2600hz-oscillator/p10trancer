@@ -4,6 +4,7 @@ struct PadGridView: View {
     let pads: PadSystem
     @ObservedObject var mixer: MixerState
     @ObservedObject var liveRecordings: LiveRecordingsStore
+    @ObservedObject var cameras: CameraRegistry
     @State private var importerVisible: Bool = false
     @State private var pendingPadIndex: Int = -1
 
@@ -93,6 +94,35 @@ struct PadGridView: View {
                 } label: {
                     Label("Load Video…", systemImage: "folder")
                 }
+                Menu {
+                    if cameras.devices.isEmpty {
+                        Text("No cameras detected")
+                    } else {
+                        ForEach(cameras.devices) { device in
+                            Button {
+                                AppState.shared.setCameraSource(deviceID: device.id, at: index)
+                            } label: {
+                                Label(device.label, systemImage: cameraIcon(for: device.kind))
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Camera", systemImage: "camera")
+                }
+                Menu {
+                    Button {
+                        AppState.shared.setKeyerSource(keyerIndex: 0, at: index)
+                    } label: {
+                        Label("Keyer 1", systemImage: "1.square")
+                    }
+                    Button {
+                        AppState.shared.setKeyerSource(keyerIndex: 1, at: index)
+                    } label: {
+                        Label("Keyer 2", systemImage: "2.square")
+                    }
+                } label: {
+                    Label("Keyer", systemImage: "rectangle.on.rectangle")
+                }
                 Button {
                     AppState.shared.setMasterFeedbackSource(at: index)
                 } label: {
@@ -110,6 +140,14 @@ struct PadGridView: View {
                     Label("Inspect FX", systemImage: "slider.horizontal.3")
                 }
             }
+    }
+
+    private func cameraIcon(for kind: CameraDevice.Kind) -> String {
+        switch kind {
+        case .builtinFront: return "camera.rotate"
+        case .builtinBack: return "camera"
+        case .external: return "camera.viewfinder"
+        }
     }
 
     private func chip(_ text: String, color: Color) -> some View {

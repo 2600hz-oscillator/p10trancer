@@ -3,8 +3,20 @@ import AVFoundation
 
 struct ContentView: View {
     private let appState = AppState.shared
+    @State private var entered: Bool = false
 
     var body: some View {
+        if !entered {
+            SplashView(onEnter: {
+                entered = true
+                appState.startIfNeeded()
+            })
+        } else {
+            mainView
+        }
+    }
+
+    private var mainView: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
@@ -26,7 +38,7 @@ struct ContentView: View {
 
                 Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
 
-                PadGridView(pads: appState.pads, mixer: appState.mixer, liveRecordings: appState.liveRecordings)
+                PadGridView(pads: appState.pads, mixer: appState.mixer, liveRecordings: appState.liveRecordings, cameras: appState.cameras)
                     .frame(height: gridH)
                     .frame(maxWidth: .infinity)
                     .background(.black)
@@ -36,32 +48,28 @@ struct ContentView: View {
                 BottomControlBar(
                     pads: appState.pads,
                     mixer: appState.mixer,
-                    keyer: appState.keyerState,
+                    keyerSystem: appState.keyerSystem,
                     ntsc: appState.ntscState,
                     thermal: appState.thermalMonitor,
                     recorder: appState.recorder,
                     automation: appState.automation,
-                    liveRecordings: appState.liveRecordings
+                    liveRecordings: appState.liveRecordings,
+                    sessions: appState.sessions,
+                    onEndSession: { entered = false }
                 )
                 .frame(height: barHeight)
             }
         }
         .ignoresSafeArea()
         .background(.black)
-        .onAppear { appState.startIfNeeded() }
     }
 
     private var statusOverlay: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("OUTPUT")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(.white.opacity(0.6))
-            Text("Phase 10b — bottom controls")
-                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
-        }
-        .padding(14)
+        Text("OUTPUT")
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .tracking(1.5)
+            .foregroundStyle(.white.opacity(0.6))
+            .padding(14)
     }
 }
 

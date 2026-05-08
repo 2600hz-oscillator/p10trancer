@@ -101,14 +101,14 @@ final class MIDIBindingsTests: XCTestCase {
 
     func test_pc_19_routes_keyer_to_ch1() {
         bindings.handleProgramChange(19)
-        XCTAssertTrue(mixer.ch1IsKeyer)
-        XCTAssertFalse(mixer.ch2IsKeyer)
+        XCTAssertEqual(mixer.ch1KeyerIndex, 0)
+        XCTAssertNil(mixer.ch2KeyerIndex)
     }
 
     func test_pc_20_routes_keyer_to_ch2() {
         bindings.handleProgramChange(20)
-        XCTAssertTrue(mixer.ch2IsKeyer)
-        XCTAssertFalse(mixer.ch1IsKeyer)
+        XCTAssertEqual(mixer.ch2KeyerIndex, 0)
+        XCTAssertNil(mixer.ch1KeyerIndex)
     }
 
     // MARK: - CC: mixer & master
