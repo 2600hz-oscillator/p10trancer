@@ -1,0 +1,421 @@
+import SwiftUI
+
+struct BottomControlBar: View {
+    let pads: PadSystem
+    @ObservedObject var mixer: MixerState
+    @ObservedObject var keyer: KeyerState
+    @ObservedObject var ntsc: NTSCState
+    @ObservedObject var thermal: ThermalMonitor
+    @ObservedObject var recorder: MixerRecorder
+    @ObservedObject var automation: AutomationEngine
+
+    @State private var showInspector = false
+    @State private var showMixer = false
+    @State private var showAutomation = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            primaryRow
+            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+            secondaryRow
+        }
+        .background(.black)
+        .sheet(isPresented: $showInspector) {
+            InspectorSheet(pads: pads, mixer: mixer, keyer: keyer, ntsc: ntsc, thermal: thermal)
+        }
+        .sheet(isPresented: $showMixer) {
+            MixerPanelView(pads: pads, mixer: mixer)
+        }
+        .sheet(isPresented: $showAutomation) {
+            AutomationPanelView(engine: automation)
+        }
+    }
+
+    private var primaryRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            channelBlock
+            verticalDivider
+            transitionBlock
+            verticalDivider
+            faderBlock(label: "POSITION", value: $mixer.position, in: 0...1)
+            verticalDivider
+            faderBlock(label: "MASTER VOL", value: Binding(
+                get: { mixer.masterVolume },
+                set: { v in mixer.masterVolume = v; AudioEngine.shared.masterVolume = v }
+            ), in: 0...1)
+            verticalDivider
+            recordButton
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(height: 90)
+    }
+
+    private var recordButton: some View {
+        Button(action: { recorder.toggle() }) {
+            VStack(spacing: 2) {
+                Circle()
+                    .fill(recorder.isRecording ? Color.red : Color.red.opacity(0.4))
+                    .frame(width: 18, height: 18)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1))
+                Text(recorder.isRecording ? "STOP" : "REC")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 70, height: 60)
+            .background(recorder.isRecording ? Color.red.opacity(0.18) : Color.white.opacity(0.08))
+            .overlay(Rectangle().strokeBorder(recorder.isRecording ? Color.red : Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var secondaryRow: some View {
+        HStack(spacing: 12) {
+            hdmiBlock
+            verticalDivider
+            keyerToggleBlock
+            verticalDivider
+            ntscBlock
+            verticalDivider
+            mixerButton
+            automationButton
+            inspectButton
+            Spacer(minLength: 8)
+            automationStatus
+            thermalIndicator
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(height: 70)
+    }
+
+    private var channelBlock: some View {
+        HStack(spacing: 8) {
+            bigChannelButton(channel: .ch1, label: "CH 1", tint: .cyan, source: mixer.ch1Source)
+            bigChannelButton(channel: .ch2, label: "CH 2", tint: .orange, source: mixer.ch2Source)
+        }
+        .frame(width: 220)
+    }
+
+    private func bigChannelButton(channel: ActiveChannel, label: String, tint: Color, source: ChannelSource) -> some View {
+        let isActive = mixer.activeChannel == channel
+        let sub: String
+        switch source {
+        case .pad(let i): sub = "PAD \(i + 1)"
+        case .keyer: sub = "KEYER"
+        }
+        return Button(action: { mixer.activeChannel = channel }) {
+            VStack(spacing: 2) {
+                Text(label)
+                    .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                Text(sub)
+                    .font(.system(size: 9, weight: .regular, design: .monospaced))
+                    .opacity(0.9)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(isActive ? tint : Color.white.opacity(0.10))
+            .foregroundStyle(isActive ? Color.black : Color.white)
+            .overlay(
+                Rectangle().strokeBorder(isActive ? tint : Color.white.opacity(0.3), lineWidth: isActive ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var transitionBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("TRANSITION")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.5))
+                .tracking(1.5)
+            Picker("", selection: $mixer.transition) {
+                ForEach(TransitionKind.allCases) { k in Text(k.displayName).tag(k) }
+            }
+            .pickerStyle(.segmented)
+            .colorScheme(.dark)
+        }
+        .frame(width: 280)
+    }
+
+    private func faderBlock(label: String, value: Binding<Float>, in range: ClosedRange<Float>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .tracking(1.5)
+                Spacer()
+                Text(String(format: "%.2f", value.wrappedValue))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            Slider(value: value, in: range).tint(.white)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var hdmiBlock: some View {
+        HStack(spacing: 6) {
+            Text("HDMI")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.5))
+                .tracking(1.5)
+            Picker("", selection: $mixer.outputMode) {
+                ForEach(OutputMode.allCases) { m in Text(m.displayName).tag(m) }
+            }
+            .pickerStyle(.segmented)
+            .colorScheme(.dark)
+            .frame(width: 140)
+        }
+    }
+
+    private var keyerToggleBlock: some View {
+        Button(action: { keyer.isEnabled.toggle() }) {
+            HStack(spacing: 4) {
+                Circle().fill(keyer.isEnabled ? Color.green : Color.white.opacity(0.3)).frame(width: 8, height: 8)
+                Text("KEYER")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .overlay(Rectangle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var ntscBlock: some View {
+        HStack(spacing: 4) {
+            Circle().fill(mixer.outputMode == .ntsc4_3 ? Color.green : Color.white.opacity(0.3)).frame(width: 8, height: 8)
+            Text("NTSC")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(mixer.outputMode == .ntsc4_3 ? .white : .white.opacity(0.5))
+        }
+    }
+
+    private var inspectButton: some View {
+        Button(action: { showInspector = true }) {
+            Text("INSPECT…")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.yellow, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var mixerButton: some View {
+        Button(action: { showMixer = true }) {
+            Text("MIXER…")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.green, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var automationButton: some View {
+        Button(action: { showAutomation = true }) {
+            Text("AUTO…")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.cyan, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var automationStatus: some View {
+        let (label, color): (String, Color) = {
+            switch automation.state {
+            case .idle: return ("AUTO IDLE", .white.opacity(0.3))
+            case .armedRecord: return ("ARMED REC", .red)
+            case .recording: return ("REC ●", .red)
+            case .armedPlayback: return ("ARMED PLAY", .yellow)
+            case .playing: return ("PLAY ▶", .green)
+            }
+        }()
+        return HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(label)
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .foregroundStyle(color)
+        }
+    }
+
+    private var thermalIndicator: some View {
+        let color: Color
+        switch thermal.indicatorColor {
+        case .nominal: color = .green
+        case .warm: color = .yellow
+        case .hot: color = .orange
+        case .critical: color = .red
+        }
+        return HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(thermal.label)
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.7))
+        }
+    }
+
+    private var verticalDivider: some View {
+        Rectangle().fill(Color.white.opacity(0.14)).frame(width: 1)
+    }
+}
+
+private struct InspectorSheet: View {
+    let pads: PadSystem
+    @ObservedObject var mixer: MixerState
+    @ObservedObject var keyer: KeyerState
+    @ObservedObject var ntsc: NTSCState
+    @ObservedObject var thermal: ThermalMonitor
+    @Environment(\.dismiss) private var dismiss
+    @State private var showVideoImporter = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text("INSPECTOR")
+                        .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Button("CLOSE") { dismiss() }
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(.white)
+                }
+                keyerSection
+                if mixer.outputMode == .ntsc4_3 { ntscSection }
+                fxSection
+                Spacer()
+            }
+            .padding(20)
+        }
+        .background(.black)
+        .preferredColorScheme(.dark)
+        .fileImporter(
+            isPresented: $showVideoImporter,
+            allowedContentTypes: [.movie, .video, .mpeg4Movie, .quickTimeMovie],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    AppState.shared.loadUserVideo(from: url, at: mixer.inspectedPadIndex)
+                }
+            case .failure(let error):
+                P10Logger.log("[InspectorSheet] file import failed: \(error)")
+            }
+        }
+    }
+
+    private var keyerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("KEYER")
+            HStack {
+                Toggle(isOn: $keyer.isEnabled) {
+                    Text("Enabled").font(.system(size: 12, design: .monospaced)).foregroundStyle(.white)
+                }
+                .toggleStyle(.switch).tint(.green)
+                Spacer()
+                Button("→ CH1") { mixer.routeKeyerTo(.ch1) }.buttonStyle(.bordered).tint(.cyan)
+                Button("→ CH2") { mixer.routeKeyerTo(.ch2) }.buttonStyle(.bordered).tint(.orange)
+            }
+            if keyer.isEnabled {
+                padPicker("FG", $keyer.foregroundPadIndex)
+                padPicker("BG", $keyer.backgroundPadIndex)
+                Picker("Kind", selection: $keyer.kind) {
+                    ForEach(KeyerKind.allCases) { Text($0.displayName).tag($0) }
+                }
+                .pickerStyle(.segmented).colorScheme(.dark)
+                slider("Threshold", $keyer.threshold, in: 0...1)
+                slider("Softness", $keyer.softness, in: 0.001...0.5)
+            }
+        }
+    }
+
+    private var ntscSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("NTSC FX")
+            slider("Chroma boost", $ntsc.chromaBoost, in: 0...3)
+            slider("Luma peak", $ntsc.lumaPeaking, in: 0...3)
+            slider("HSync wobble", $ntsc.hsyncWobble, in: 0...1)
+            slider("Burst phase", $ntsc.burstPhaseShift, in: -0.5...0.5)
+            slider("Subcarrier drift", $ntsc.subcarrierDrift, in: 0...0.5)
+            slider("Y/C delay", $ntsc.ycDelay, in: -8...8)
+            slider("Dropout", $ntsc.dropoutRate, in: 0...1)
+            slider("Luma noise", $ntsc.lumaNoise, in: 0...0.3)
+            slider("Chroma noise", $ntsc.chromaNoise, in: 0...0.3)
+        }
+    }
+
+    private var fxSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("PER-PAD FX")
+            HStack {
+                Text("Pad").foregroundStyle(.white).font(.system(size: 12, design: .monospaced))
+                Picker("", selection: $mixer.inspectedPadIndex) {
+                    ForEach(0..<PadSystem.padCount, id: \.self) { i in Text("\(i + 1)").tag(i) }
+                }.pickerStyle(.segmented).colorScheme(.dark)
+            }
+            sourcePicker
+            FXInspectorView(pads: pads, mixer: mixer)
+        }
+    }
+
+    private var sourcePicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("SOURCE")
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(.white.opacity(0.5))
+            HStack(spacing: 8) {
+                Button("Load Video…") {
+                    showVideoImporter = true
+                }
+                .buttonStyle(.bordered)
+                .tint(.blue)
+                Button("Master Feedback") {
+                    AppState.shared.setMasterFeedbackSource(at: mixer.inspectedPadIndex)
+                }
+                .buttonStyle(.bordered)
+                .tint(.purple)
+                Button("Reset to Bundled") {
+                    AppState.shared.reloadVideoSource(at: mixer.inspectedPadIndex)
+                }
+                .buttonStyle(.bordered)
+                .tint(.gray)
+            }
+            .font(.system(size: 11, design: .monospaced))
+        }
+    }
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+            .tracking(2.0)
+            .foregroundStyle(.white)
+    }
+
+    private func padPicker(_ label: String, _ binding: Binding<Int>) -> some View {
+        HStack {
+            Text(label).font(.system(size: 11, weight: .heavy, design: .monospaced)).foregroundStyle(.white).frame(width: 30)
+            Picker("", selection: binding) {
+                ForEach(0..<PadSystem.padCount, id: \.self) { i in Text("\(i + 1)").tag(i) }
+            }.pickerStyle(.segmented).colorScheme(.dark)
+        }
+    }
+
+    private func slider(_ label: String, _ binding: Binding<Float>, in range: ClosedRange<Float>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label).font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Text(String(format: "%.2f", binding.wrappedValue))
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
+            }
+            Slider(value: binding, in: range).tint(.white)
+        }
+    }
+}
