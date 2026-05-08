@@ -48,11 +48,21 @@ final class MIDIRouter {
         print("[MIDIRouter] started; sources: \(MIDIGetNumberOfSources())")
     }
 
+    /// Unique ID of our own published virtual source. Skipped during connect
+    /// so we don't echo our own emissions back into our own router (which
+    /// would cause toggle-style PCs to flip state right back).
+    private static let ownSourceUniqueID: Int32 = 0x70_31_30_45 // 'p10E'
+
     func connectAllSources() {
         let count = MIDIGetNumberOfSources()
         for i in 0..<count {
             let source = MIDIGetSource(i)
             guard source != 0, !connectedSources.contains(source) else { continue }
+            if Self.uniqueID(source) == Self.ownSourceUniqueID {
+                let name = Self.endpointName(source) ?? "?"
+                P10Logger.log("[MIDIRouter] skipping own virtual source: \(name)")
+                continue
+            }
             let status = MIDIPortConnectSource(inputPort, source, nil)
             if status == noErr {
                 connectedSources.insert(source)
@@ -63,6 +73,12 @@ final class MIDIRouter {
                 P10Logger.log("[MIDIRouter] connect failed (\(status)): \(name)")
             }
         }
+    }
+
+    private static func uniqueID(_ endpoint: MIDIEndpointRef) -> Int32 {
+        var value: Int32 = 0
+        let status = MIDIObjectGetIntegerProperty(endpoint, kMIDIPropertyUniqueID, &value)
+        return status == noErr ? value : 0
     }
 
     private static func endpointName(_ endpoint: MIDIEndpointRef) -> String? {

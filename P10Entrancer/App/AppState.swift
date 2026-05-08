@@ -19,6 +19,7 @@ final class AppState {
     let thermalMonitor: ThermalMonitor
     let screenshotCapturer: ScreenshotCapturer
     let recorder: MixerRecorder
+    let liveRecordings: LiveRecordingsStore
 
     private let deviceManager = CameraDeviceManager()
     private var builtInSystem: BuiltInCameraSystem?
@@ -60,11 +61,11 @@ final class AppState {
         self.thermalMonitor = ThermalMonitor(pads: pads)
         self.screenshotCapturer = ScreenshotCapturer()
         self.recorder = recorder
+        self.liveRecordings = LiveRecordingsStore(pads: pads, mixer: mixer)
         self.masterMixerOffscreen.recorder = self.recorder
         self.recorder.onFinish = { [weak self] url in
             guard let self else { return }
-            self.pads.setSource(VideoFileSource(url: url), at: 0)
-            P10Logger.log("[AppState] recording loaded into pad 1: \(url.lastPathComponent)")
+            self.liveRecordings.insert(url: url)
         }
 
         RenderEngine.shared.register(self.masterMixerOffscreen)

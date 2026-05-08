@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import P10Entrancer
 
 @MainActor
@@ -86,5 +87,33 @@ final class MixerStateTests: XCTestCase {
         // Routing to active should not change which channel is active.
         m.routeActivePad(3)
         XCTAssertEqual(m.activeChannel, .ch2)
+    }
+
+    func test_outputMode_default_and_assignment() {
+        let m = MixerState()
+        XCTAssertEqual(m.outputMode, .hd720p, "default output mode is HD")
+        m.outputMode = .ntsc4_3
+        XCTAssertEqual(m.outputMode, .ntsc4_3, "assigning .ntsc4_3 must take effect")
+        m.outputMode = .hd720p
+        XCTAssertEqual(m.outputMode, .hd720p, "assigning back to .hd720p must take effect")
+    }
+
+    func test_outputMode_canvasSize() {
+        XCTAssertEqual(OutputMode.hd720p.canvasSize.width, 1280)
+        XCTAssertEqual(OutputMode.hd720p.canvasSize.height, 720)
+        XCTAssertEqual(OutputMode.ntsc4_3.canvasSize.width, 720)
+        XCTAssertEqual(OutputMode.ntsc4_3.canvasSize.height, 480)
+    }
+
+    func test_outputMode_publishes_changes() {
+        let m = MixerState()
+        var observed: [OutputMode] = []
+        let cancellable = m.$outputMode.sink { observed.append($0) }
+        m.outputMode = .ntsc4_3
+        m.outputMode = .hd720p
+        m.outputMode = .ntsc4_3
+        cancellable.cancel()
+        XCTAssertEqual(observed, [.hd720p, .ntsc4_3, .hd720p, .ntsc4_3],
+                       "Publisher must emit initial + every assignment so SwiftUI views update")
     }
 }

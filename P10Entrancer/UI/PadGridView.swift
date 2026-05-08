@@ -3,6 +3,7 @@ import SwiftUI
 struct PadGridView: View {
     let pads: PadSystem
     @ObservedObject var mixer: MixerState
+    @ObservedObject var liveRecordings: LiveRecordingsStore
     @State private var importerVisible: Bool = false
     @State private var pendingPadIndex: Int = -1
 
@@ -45,10 +46,17 @@ struct PadGridView: View {
         let isCh1 = mixer.ch1PadIndex == index
         let isCh2 = mixer.ch2PadIndex == index
         let isInspected = mixer.inspectedPadIndex == index
+        let assignmentMode = liveRecordings.selectedID != nil
         return Color.clear
             .contentShape(Rectangle())
             .overlay(
                 ZStack(alignment: .topLeading) {
+                    if assignmentMode {
+                        Rectangle()
+                            .fill(Color.green.opacity(0.10))
+                        Rectangle()
+                            .strokeBorder(Color.green.opacity(0.7), style: StrokeStyle(lineWidth: 2, dash: [4, 4]))
+                    }
                     if isInspected {
                         Rectangle()
                             .strokeBorder(Color.yellow.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
@@ -74,6 +82,7 @@ struct PadGridView: View {
                 }
             )
             .onTapGesture {
+                if liveRecordings.loadIntoPad(index) { return }
                 mixer.routeActivePad(index)
             }
             .contextMenu {

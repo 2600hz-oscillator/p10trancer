@@ -8,6 +8,7 @@ struct BottomControlBar: View {
     @ObservedObject var thermal: ThermalMonitor
     @ObservedObject var recorder: MixerRecorder
     @ObservedObject var automation: AutomationEngine
+    @ObservedObject var liveRecordings: LiveRecordingsStore
 
     @State private var showInspector = false
     @State private var showMixer = false
@@ -18,6 +19,8 @@ struct BottomControlBar: View {
             primaryRow
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
             secondaryRow
+            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+            LiveRecordingsRowView(store: liveRecordings)
         }
         .background(.black)
         .sheet(isPresented: $showInspector) {
@@ -160,13 +163,24 @@ struct BottomControlBar: View {
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.5))
                 .tracking(1.5)
-            Picker("", selection: $mixer.outputMode) {
-                ForEach(OutputMode.allCases) { m in Text(m.displayName).tag(m) }
-            }
-            .pickerStyle(.segmented)
-            .colorScheme(.dark)
-            .frame(width: 140)
+            outputModeButton(.hd720p, label: "HD")
+            outputModeButton(.ntsc4_3, label: "NTSC 4:3")
         }
+    }
+
+    private func outputModeButton(_ mode: OutputMode, label: String) -> some View {
+        let isActive = mixer.outputMode == mode
+        return Button(action: { mixer.outputMode = mode }) {
+            Text(label)
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(isActive ? .black : .white)
+                .frame(minWidth: 64)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(isActive ? Color.green : Color.white.opacity(0.08))
+                .overlay(Rectangle().strokeBorder(isActive ? Color.green : Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private var keyerToggleBlock: some View {

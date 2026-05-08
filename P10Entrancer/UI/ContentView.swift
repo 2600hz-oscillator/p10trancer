@@ -9,7 +9,7 @@ struct ContentView: View {
             let w = geo.size.width
             let h = geo.size.height
             let isPortrait = h > w
-            let barHeight: CGFloat = isPortrait ? 220 : 160
+            let barHeight: CGFloat = isPortrait ? 320 : 260
             let workH = max(h - barHeight, 100)
             // In portrait, give ~50/50 to output and grid (both can be 16:9 friendly).
             // In landscape we'd ideally have side-by-side, but a clean stack is fine for now.
@@ -26,7 +26,7 @@ struct ContentView: View {
 
                 Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
 
-                PadGridView(pads: appState.pads, mixer: appState.mixer)
+                PadGridView(pads: appState.pads, mixer: appState.mixer, liveRecordings: appState.liveRecordings)
                     .frame(height: gridH)
                     .frame(maxWidth: .infinity)
                     .background(.black)
@@ -40,7 +40,8 @@ struct ContentView: View {
                     ntsc: appState.ntscState,
                     thermal: appState.thermalMonitor,
                     recorder: appState.recorder,
-                    automation: appState.automation
+                    automation: appState.automation,
+                    liveRecordings: appState.liveRecordings
                 )
                 .frame(height: barHeight)
             }
