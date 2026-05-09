@@ -28,6 +28,13 @@ final class PadAudioPlayer: ObservableObject {
     @Published var volume: Float {
         didSet { applyEffectiveVolume() }
     }
+    /// Per-pad mute that overrides the mixer routing — when true, the
+    /// pad contributes 0 to mainMixer regardless of channel routing or
+    /// volume slider position. Toggled by the mute button on each pad
+    /// and by MIDI mute events for project recall.
+    @Published var isMuted: Bool = false {
+        didSet { applyEffectiveVolume() }
+    }
     private var isRouted: Bool = false
 
     init(source: Source, label: String, engine: AVAudioEngine = AudioEngine.shared.engine) {
@@ -68,8 +75,19 @@ final class PadAudioPlayer: ObservableObject {
         applyEffectiveVolume()
     }
 
+    /// Pause/resume the file's audio playback. No-op for `.mic` source
+    /// (the mic engine isn't gated by per-pad play state).
+    func setPlaying(_ playing: Bool) {
+        guard case .file = source, attachedFile else { return }
+        if playing {
+            if !playerNode.isPlaying { playerNode.play() }
+        } else {
+            playerNode.pause()
+        }
+    }
+
     private func applyEffectiveVolume() {
-        mixerNode.outputVolume = isRouted ? volume : 0.0
+        mixerNode.outputVolume = (isMuted || !isRouted) ? 0.0 : volume
     }
 
     // MARK: - Source-specific setup

@@ -24,11 +24,56 @@ final class MIDIOutputBindings {
         self.ntsc = ntsc
     }
 
+    /// Per-pad subscriptions to source.isPlaying / audioPlayer.isMuted.
+    /// Tracked separately so we can tear them down and re-attach when a
+    /// pad's source is replaced (drag-drop, session load).
+    private var perPadCancellables: [Int: Set<AnyCancellable>] = [:]
+
     func attach(sink: MIDISink) {
         self.sink = sink
         wireMixer()
         wireChannelsAndModes()
         wireKeyerAndNTSC()
+        wirePerPadPlayAndMute()
+        // Re-wire the per-pad publishers when sources change.
+        let prior = pads.onSourceChanged
+        pads.onSourceChanged = { [weak self] in
+            prior?()
+            self?.wirePerPadPlayAndMute()
+        }
+    }
+
+    /// Subscribe to each pad's source.isPlaying and audioPlayer.isMuted.
+    /// Tears down any prior per-pad subscriptions first so source
+    /// replacement doesn't leak observers. Note 72+i = play toggle,
+    /// Note 84+i = mute toggle.
+    func wirePerPadPlayAndMute() {
+        for i in 0..<PadSystem.padCount {
+            perPadCancellables[i] = []
+            guard pads.pads.indices.contains(i) else { continue }
+            let pad = pads.pads[i]
+            if let video = pad.source as? VideoFileSource {
+                video.$isPlaying
+                    .removeDuplicates()
+                    .dropFirst()
+                    .sink { [weak self] _ in
+                        // Note On with the pad's play key — receivers
+                        // toggle in response, so the round-trip stays
+                        // consistent.
+                        self?.send([0x90, UInt8(72 + i), 64])
+                    }
+                    .store(in: &perPadCancellables[i, default: []])
+            }
+            if let player = pad.audioPlayer {
+                player.$isMuted
+                    .removeDuplicates()
+                    .dropFirst()
+                    .sink { [weak self] _ in
+                        self?.send([0x90, UInt8(84 + i), 64])
+                    }
+                    .store(in: &perPadCancellables[i, default: []])
+            }
+        }
     }
 
     private func wireMixer() {

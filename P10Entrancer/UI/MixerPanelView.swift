@@ -122,9 +122,21 @@ private struct InnerStrip: View {
                 .background(routedColor.opacity(isCh1 || isCh2 ? 0.25 : 0))
             VerticalSlider(value: $player.volume, tint: routedColor)
                 .frame(width: 56, height: 220)
+                .opacity(player.isMuted ? 0.35 : 1.0)
             Text(String(format: "%.2f", player.volume))
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.5))
+            Button {
+                player.isMuted.toggle()
+            } label: {
+                Image(systemName: player.isMuted ? "speaker.slash.fill" : "speaker.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(player.isMuted ? .red : .white)
+                    .frame(width: 56, height: 22)
+                    .background(player.isMuted ? Color.red.opacity(0.15) : Color.white.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+            }
+            .buttonStyle(.plain)
             Text("PAD \(index + 1)")
                 .font(.system(size: 11, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white)

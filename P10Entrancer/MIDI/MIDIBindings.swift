@@ -66,8 +66,39 @@ final class MIDIBindings {
             let padIndex60 = note - padBase60
             if (0..<PadSystem.padCount).contains(padIndex60) {
                 mixer.routeActivePad(padIndex60)
+                return
+            }
+            // Note 72-80: pad 1-9 PLAY/STOP toggle (file pads only).
+            let padBase72 = 72
+            let padPlayIndex = note - padBase72
+            if (0..<PadSystem.padCount).contains(padPlayIndex) {
+                togglePlay(at: padPlayIndex)
+                return
+            }
+            // Note 84-92: pad 1-9 MUTE toggle.
+            let padBase84 = 84
+            let padMuteIndex = note - padBase84
+            if (0..<PadSystem.padCount).contains(padMuteIndex) {
+                toggleMute(at: padMuteIndex)
             }
         }
+    }
+
+    /// Toggle the file pad's play/stop state. No-op for non-file sources
+    /// (cameras, keyers, feedback) — those don't have a meaningful
+    /// stop concept.
+    func togglePlay(at padIndex: Int) {
+        guard pads.pads.indices.contains(padIndex) else { return }
+        guard let video = pads.pads[padIndex].source as? VideoFileSource else { return }
+        video.isPlaying.toggle()
+    }
+
+    /// Toggle the per-pad mute. Affects any pad that has an audioPlayer
+    /// (file pads + camera/mic pads).
+    func toggleMute(at padIndex: Int) {
+        guard pads.pads.indices.contains(padIndex) else { return }
+        guard let player = pads.pads[padIndex].audioPlayer else { return }
+        player.isMuted.toggle()
     }
 
     // MARK: - Program Change (primary pad / mode triggers)

@@ -234,6 +234,47 @@ final class MIDIBindingsTests: XCTestCase {
         XCTAssertFalse(fbPad6?.isEnabled ?? true, "Feedback on a different pad must NOT enable")
     }
 
+    // MARK: - Per-pad play / mute toggles (Notes 72-80 / 84-92)
+
+    func test_note_72_through_80_toggle_play_on_file_pads() {
+        // Place a known file source on pad 0 so we can observe isPlaying.
+        let url = Bundle.main.url(forResource: "pad1", withExtension: "mp4")
+        try? XCTSkipIf(url == nil, "pad1.mp4 missing from bundle")
+        if let url {
+            pads.setSource(VideoFileSource(url: url), at: 0)
+        }
+        let video = pads.pads[0].source as? VideoFileSource
+        XCTAssertEqual(video?.isPlaying, true, "Default state is playing")
+        bindings.handleNoteOn(72) // pad 1 toggle
+        XCTAssertEqual(video?.isPlaying, false, "Note 72 toggles pad 1 to stopped")
+        bindings.handleNoteOn(72)
+        XCTAssertEqual(video?.isPlaying, true, "Note 72 toggles pad 1 back to playing")
+    }
+
+    func test_note_72_no_op_for_non_file_sources() {
+        // Pad 0 has whatever default it has; replace with nil to ensure
+        // it's a non-file source.
+        pads.setSource(nil, at: 0)
+        // Should not crash.
+        bindings.handleNoteOn(72)
+    }
+
+    func test_note_84_through_92_toggle_mute_on_audio_pads() {
+        let url = Bundle.main.url(forResource: "pad1", withExtension: "mp4")
+        try? XCTSkipIf(url == nil, "pad1.mp4 missing from bundle")
+        if let url {
+            pads.setSource(VideoFileSource(url: url), at: 3)
+        }
+        guard let player = pads.pads[3].audioPlayer else {
+            XCTFail("audioPlayer expected on file pad"); return
+        }
+        XCTAssertFalse(player.isMuted)
+        bindings.handleNoteOn(84 + 3) // pad 4 mute toggle
+        XCTAssertTrue(player.isMuted, "Note 87 should mute pad 4")
+        bindings.handleNoteOn(84 + 3)
+        XCTAssertFalse(player.isMuted, "Note 87 toggles pad 4 back unmuted")
+    }
+
     func test_inspect_then_modify_then_inspect_different() {
         // Regression for the user's "fade ch2 to ch3 + ramp pad-2 feedback" workflow.
         // Sequence: select pad 1 (PC 23), ramp its feedback (CC 32), then select pad 2 (PC 24)

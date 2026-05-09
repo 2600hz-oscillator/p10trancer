@@ -4,12 +4,24 @@ import Metal
 import QuartzCore
 
 @MainActor
-final class VideoFileSource: PadSource {
+final class VideoFileSource: PadSource, ObservableObject {
     private(set) var currentTexture: MTLTexture?
     private(set) var displayAspect: Float = 16.0 / 9.0
     var targetFPS: Double = 15.0
 
     let audioPlayer: PadAudioPlayer
+
+    /// Per-pad play/stop state. When false, tick() doesn't pull new
+    /// frames (so the visible texture freezes on the last decoded one)
+    /// and the audio player is paused. Toggled by the pad's play/stop
+    /// button and by MIDI play/stop events. @Published so MIDIOutputBindings
+    /// can subscribe to changes for project-recall recording.
+    @Published var isPlaying: Bool = true {
+        didSet {
+            guard isPlaying != oldValue else { return }
+            audioPlayer.setPlaying(isPlaying)
+        }
+    }
 
     let url: URL
     private let context: MetalContext
@@ -77,6 +89,7 @@ final class VideoFileSource: PadSource {
     }
 
     func tick(timestamp: CFTimeInterval) {
+        guard isPlaying else { return }
         let interval = 1.0 / targetFPS
         if timestamp - lastFramePullTime < interval { return }
         guard let output = output, let reader = reader else { return }

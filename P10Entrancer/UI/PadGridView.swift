@@ -80,6 +80,7 @@ struct PadGridView: View {
                         .background(.black.opacity(0.5))
                         .padding([.bottom, .trailing], 6)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    PadFooterControls(pad: pads.pads[index], padIndex: index)
                 }
             )
             .onTapGesture {
