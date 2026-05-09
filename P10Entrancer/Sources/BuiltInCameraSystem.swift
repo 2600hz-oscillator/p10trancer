@@ -21,6 +21,10 @@ final class BuiltInCameraSystem {
         }
         let session = AVCaptureMultiCamSession()
         self.session = session
+        // Prevent AVCaptureSession from mutating our AVAudioSession category
+        // (which silences playback). See CameraSource for the same fix.
+        session.usesApplicationAudioSession = true
+        session.automaticallyConfiguresApplicationAudioSession = false
 
         let backAttach = Self.attach(
             session: session,

@@ -95,11 +95,26 @@ final class AudioAppender {
 
     private var diagnosticCounter: Int = 0
 
+    /// Continuously-updated RMS of the most recent buffer the persistent
+    /// tap delivered. Used by integration tests to verify audio is
+    /// flowing through mainMixerNode without having to install a second
+    /// tap (AVAudioEngine only allows one tap per bus). Float so the
+    /// audio thread can write it without locking.
+    private(set) var lastBufferRMS: Float = 0
+
     /// Tap callback. Runs on the audio render thread.
     func handle(_ buffer: AVAudioPCMBuffer) {
         let frames = CMItemCount(buffer.frameLength)
         guard frames > 0 else { return }
         diagnosticCounter &+= 1
+
+        // Always-on RMS probe so tests can see whether audio is flowing
+        // through mainMixerNode regardless of recording state.
+        if let ch0 = buffer.floatChannelData?[0] {
+            var sum: Float = 0
+            for i in 0..<Int(buffer.frameLength) { sum += ch0[i] * ch0[i] }
+            lastBufferRMS = sqrtf(sum / Float(max(1, buffer.frameLength)))
+        }
 
         lock.lock()
         guard enabled,

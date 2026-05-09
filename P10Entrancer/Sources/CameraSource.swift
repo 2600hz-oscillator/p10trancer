@@ -30,6 +30,12 @@ final class CameraSource: NSObject, PadSource {
         CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, context.device, nil, &cache)
         self.textureCache = cache
 
+        // Prevent AVCaptureSession from rewriting our AVAudioSession
+        // category. Without this, starting the camera mutates our session
+        // away from .playback and silences all audio output.
+        session.usesApplicationAudioSession = true
+        session.automaticallyConfiguresApplicationAudioSession = false
+
         do {
             session.beginConfiguration()
             session.sessionPreset = .hd1280x720

@@ -6,6 +6,11 @@ final class PadSystem {
     static let padCount = 9
     let pads: [PadSlot]
 
+    /// Fires after any pad's source has been replaced. AppState uses this
+    /// to re-run audio routing so the new source's audioPlayer picks up
+    /// the channel-assignment state.
+    var onSourceChanged: (() -> Void)?
+
     init() {
         var slots: [PadSlot] = []
         for i in 0..<Self.padCount {
@@ -26,6 +31,7 @@ final class PadSystem {
     func setSource(_ source: PadSource?, at index: Int) {
         guard pads.indices.contains(index) else { return }
         pads[index].source = source
+        onSourceChanged?()
     }
 
     private static func makeFXChain() -> FXChain {

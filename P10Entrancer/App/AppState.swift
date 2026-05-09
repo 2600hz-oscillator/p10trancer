@@ -88,6 +88,15 @@ final class AppState {
         P10Logger.log("[AppState] startIfNeeded — Phase 10b")
         AudioEngine.shared.startIfNeeded()
         AudioEngine.shared.masterVolume = mixer.masterVolume
+        // Pre-install both audio taps. The persistent recorder tap on
+        // mainMixer means REC doesn't need a graph reconfigure. The mic
+        // tap on inputNode also runs for the app's lifetime; the queue
+        // it feeds is only drained while a recording is active.
+        recorder.installPersistentTap()
+        Task { @MainActor in
+            await MicCapture.shared.ensureRunning()
+            AudioEngine.shared.logSessionState(tag: "after mic tap")
+        }
         midiBindings.attach(to: MIDIRouter.shared)
         MIDIRouter.shared.startIfNeeded()
         MIDIOutput.shared.startIfNeeded()
@@ -111,6 +120,7 @@ final class AppState {
         applyDefaultPresetIfAny()
         RenderEngine.shared.start()
         screenshotCapturer.start()
+        wireMasterVolume()
         wireAudioRouting()
     }
 
@@ -195,17 +205,38 @@ final class AppState {
         P10Logger.log("[AppState] loaded session '\(name)'")
     }
 
+    /// Keep AudioEngine.mainMixerNode.outputVolume synced with
+    /// mixer.masterVolume from any source (UI slider, MIDI CC, session
+    /// load). Without this, session loads silently muted the engine
+    /// because they bypass the slider's setter.
+    private func wireMasterVolume() {
+        mixer.$masterVolume
+            .receive(on: DispatchQueue.main)
+            .sink { v in AudioEngine.shared.masterVolume = v }
+            .store(in: &cancellables)
+    }
+
     private func wireAudioRouting() {
+        // `.receive(on: .main)` defers the sink to the next runloop tick.
+        // Required because @Published emits in willSet, so reading
+        // mixer.ch1Source synchronously inside the sink returns the OLD
+        // value — that bug made tap-to-route lag by one tap.
         Publishers.CombineLatest(mixer.$ch1Source, mixer.$ch2Source)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _, _ in
                 self?.applyAudioRouting()
             }
             .store(in: &cancellables)
         for keyer in keyerSystem.keyers {
             keyer.$foregroundPadIndex
+                .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in self?.applyAudioRouting() }
                 .store(in: &cancellables)
         }
+        // Re-apply routing whenever a pad's source changes (drag-drop,
+        // session load, etc.) so the new audioPlayer's isRouted state
+        // matches the current channel assignments.
+        pads.onSourceChanged = { [weak self] in self?.applyAudioRouting() }
         applyAudioRouting()
     }
 

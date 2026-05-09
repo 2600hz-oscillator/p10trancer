@@ -55,6 +55,10 @@ targets:
         TARGETED_DEVICE_FAMILY: "2"
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
         GENERATE_INFOPLIST_FILE: YES
+        DEVELOPMENT_TEAM: PHY35R5456
+        CODE_SIGN_STYLE: Automatic
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/P10Entrancer.app/P10Entrancer
+        BUNDLE_LOADER: $(TEST_HOST)
     dependencies:
       - target: P10Entrancer
 

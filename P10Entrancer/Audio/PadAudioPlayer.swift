@@ -47,15 +47,20 @@ final class PadAudioPlayer: ObservableObject {
     }
 
     deinit {
-        if attachedFile {
-            playerNode.stop()
-            engine.detach(playerNode)
-            engine.detach(mixerNode)
+        // We stop the player but deliberately do NOT detach the nodes from
+        // the engine. Detaching a node that's connected to mainMixerNode
+        // reliably throws inside AVAudioEngineGraph::UpdateGraphAfterReconfig
+        // on iPadOS 26 — see crash log P10Entrancer-2026-05-09-111210.ips.
+        // The leak is two AVAudioNodes per pad-source change; the engine's
+        // mainMixer accepts unlimited inputs, and the mute-via-outputVolume
+        // path keeps stale players silent. Accept the leak for stability.
+        guard attachedFile else { return }
+        let player = playerNode
+        let mixer = mixerNode
+        Task { @MainActor in
+            player.stop()
+            mixer.outputVolume = 0
         }
-        // Mic taps deliberately not torn down here — would need to hop to
-        // MainActor and run disconnect through MicCapture. The leak is
-        // small (one detached mixer node per camera-source lifecycle) and
-        // doesn't affect playback.
     }
 
     func setRouted(_ routed: Bool) {

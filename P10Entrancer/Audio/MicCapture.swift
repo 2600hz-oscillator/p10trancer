@@ -1,11 +1,12 @@
 import Foundation
 import AVFoundation
 
-/// Captures the iPad mic via `installTap(onBus:0)` on the engine's input
-/// node. **Never** connects inputNode to other engine nodes — that path
-/// reliably crashes AVAudioEngine when the route format isn't yet
-/// resolved. The tap callback writes copied PCM buffers into a thread-
-/// safe queue that `AudioAppender` drains during recording.
+/// Captures the iPad mic via a *dedicated* AVAudioEngine (not the
+/// shared playback engine). Activating inputNode on the playback
+/// engine silences mainMixer's output on iPadOS 26 — see
+/// AudioEndToEndTests.test_audio_survives_mic_tap_install. A separate
+/// engine has its own graph, so installing a tap on its inputNode
+/// doesn't disturb playback.
 @MainActor
 final class MicCapture {
     static let shared = MicCapture()
@@ -17,14 +18,16 @@ final class MicCapture {
     @Published var recordGain: Float = 0
     let queue = MicBufferQueue()
 
+    /// Dedicated mic engine. Started only after permission is granted.
+    private let micEngine = AVAudioEngine()
     private var tapInstalled = false
     private var setupTask: Task<Void, Never>?
 
     private init() {}
 
-    /// Idempotent. Returns once the mic tap is installed (or once
-    /// permission was denied / setup already failed). Safe from N
-    /// concurrent callers.
+    /// Idempotent. Returns once the dedicated mic engine is running and
+    /// the tap is installed (or once permission is denied / setup
+    /// failed). Safe from N concurrent callers.
     func ensureRunning() async {
         if isReady { return }
         if let task = setupTask {
@@ -42,28 +45,31 @@ final class MicCapture {
             P10Logger.log("[MicCapture] permission denied")
             return
         }
-        let engine = AudioEngine.shared.engine
         guard !tapInstalled else {
             isReady = true
             return
         }
-        // installTap on inputNode — Apple's documented pattern. The format
-        // is passed as nil so the engine resolves it from the live route.
-        // This does not require the engine to be running with input wired
-        // up; the tap callback just starts firing once samples are available.
+        // Tap inputNode of the dedicated mic engine — never the shared
+        // playback engine. format: nil lets AVFoundation resolve from
+        // the live route.
         let queue = self.queue
-        engine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, _ in
+        micEngine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, _ in
             queue.push(buffer)
         }
         tapInstalled = true
-        isReady = true
-        let fmt = engine.inputNode.outputFormat(forBus: 0)
-        P10Logger.log("[MicCapture] tap installed ch=\(fmt.channelCount) sr=\(fmt.sampleRate)")
+        do {
+            try micEngine.start()
+            isReady = true
+            let fmt = micEngine.inputNode.outputFormat(forBus: 0)
+            P10Logger.log("[MicCapture] dedicated engine running; tap ch=\(fmt.channelCount) sr=\(fmt.sampleRate)")
+        } catch {
+            P10Logger.log("[MicCapture] mic engine start failed: \(error)")
+        }
     }
 
-    /// Currently-known mic format from the engine. Useful for AVAudioConverter.
+    /// Currently-known mic format from the dedicated mic engine.
     var inputFormat: AVAudioFormat {
-        AudioEngine.shared.engine.inputNode.outputFormat(forBus: 0)
+        micEngine.inputNode.outputFormat(forBus: 0)
     }
 
     private func requestPermission() async -> Bool {

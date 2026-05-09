@@ -21,7 +21,8 @@ final class MixerRecorder: ObservableObject {
     private var canvasSize: (Int, Int) = (1280, 720)
 
     let audioAppender = AudioAppender()
-    private var tappedNode: AVAudioMixerNode?
+    private var persistentTapInstalled = false
+    private var persistentTapFormat: AVAudioFormat?
 
     var onFinish: ((URL) -> Void)?
 
@@ -31,6 +32,27 @@ final class MixerRecorder: ObservableObject {
         } else {
             start()
         }
+    }
+
+    /// Install the recorder's tap on mainMixerNode at app startup so we
+    /// never have to reconfigure the audio graph during REC (which
+    /// silences playback on iPadOS 26). Buffers are gated by
+    /// `audioAppender.enabled` — when not recording, the appender drops
+    /// them on the floor, free.
+    func installPersistentTap() {
+        guard !persistentTapInstalled else { return }
+        let mixer = AudioEngine.shared.engine.mainMixerNode
+        let format = mixer.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else {
+            P10Logger.log("[MixerRecorder] mainMixer not ready (sr=0); deferring tap")
+            return
+        }
+        mixer.installTap(onBus: 0, bufferSize: 4096, format: format) { [appender = audioAppender] buffer, _ in
+            appender.handle(buffer)
+        }
+        persistentTapInstalled = true
+        persistentTapFormat = format
+        P10Logger.log("[MixerRecorder] persistent tap installed on mainMixer ch=\(format.channelCount) sr=\(format.sampleRate)")
     }
 
     func start() {
@@ -76,9 +98,12 @@ final class MixerRecorder: ObservableObject {
             }
             writer.add(videoInput)
 
-            // Audio — match the live engine's mainMixerNode output format.
-            let mixer = AudioEngine.shared.engine.mainMixerNode
-            let inputFormat = mixer.outputFormat(forBus: 0)
+            // Audio — match the format the persistent tap is delivering.
+            // Falls back to the live mainMixer format if the tap hasn't
+            // been installed yet (e.g., engine wasn't ready at boot).
+            installPersistentTap()
+            let inputFormat = persistentTapFormat
+                ?? AudioEngine.shared.engine.mainMixerNode.outputFormat(forBus: 0)
             var addedAudio = false
             if let (audioWriterInput, fmtDesc) = AudioAppender.makeInput(format: inputFormat),
                writer.canAdd(audioWriterInput) {
@@ -108,18 +133,10 @@ final class MixerRecorder: ObservableObject {
             self.isRecording = true
 
             if addedAudio {
+                let gain = MicCapture.shared.recordGain
+                self.audioAppender.setMicMix(queue: MicCapture.shared.queue, gain: gain)
                 audioAppender.setEnabled(true)
-                installAudioTap(on: mixer, format: inputFormat)
-                self.tappedNode = mixer
-                // Kick off mic capture (idempotent). It might not be ready
-                // yet — the queue stays empty until samples arrive. The
-                // appender's mic-mix gracefully handles an empty queue.
-                Task { @MainActor in
-                    await MicCapture.shared.ensureRunning()
-                    let gain = MicCapture.shared.recordGain
-                    self.audioAppender.setMicMix(queue: MicCapture.shared.queue, gain: gain)
-                    P10Logger.log("[MixerRecorder] mic mix gain=\(gain) ready=\(MicCapture.shared.isReady)")
-                }
+                P10Logger.log("[MixerRecorder] mic mix gain=\(gain) ready=\(MicCapture.shared.isReady)")
             }
             P10Logger.log("[MixerRecorder] started: \(url.lastPathComponent) \(w)x\(h) audio=\(addedAudio ? "yes" : "no")")
         } catch {
@@ -132,13 +149,12 @@ final class MixerRecorder: ObservableObject {
         isRecording = false
 
         // Cut audio off first to avoid late buffers landing after finish.
+        // We keep the persistent tap installed — the appender now
+        // ignores buffers when disabled, and re-installing on next REC
+        // would cause a graph reconfigure that silences playback.
         audioAppender.setEnabled(false)
         audioAppender.setMicMix(queue: nil, gain: 0)
         MicCapture.shared.queue.clear()
-        if let node = tappedNode {
-            node.removeTap(onBus: 0)
-            tappedNode = nil
-        }
 
         guard let writer = writer, let input = videoInput, let url = lastRecordingURL else { return }
         input.markAsFinished()
@@ -194,9 +210,4 @@ final class MixerRecorder: ObservableObject {
         frameCount += 1
     }
 
-    private func installAudioTap(on node: AVAudioMixerNode, format: AVAudioFormat) {
-        node.installTap(onBus: 0, bufferSize: 4096, format: format) { [appender = audioAppender] buffer, _ in
-            appender.handle(buffer)
-        }
-    }
 }
