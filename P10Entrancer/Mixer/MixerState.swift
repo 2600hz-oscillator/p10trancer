@@ -8,7 +8,8 @@ enum ActiveChannel: Int {
 
 enum ChannelSource: Equatable {
     case pad(Int)
-    case keyer(Int) // 0 = Keyer 1, 1 = Keyer 2
+    case keyer(Int)    // 0 = Keyer 1, 1 = Keyer 2
+    case feedback(Int) // 0 = FB 1, 1 = FB 2
 }
 
 enum OutputMode: Int, CaseIterable, Identifiable {
@@ -78,6 +79,21 @@ final class MixerState: ObservableObject {
 
     var ch2KeyerIndex: Int? {
         if case .keyer(let i) = ch2Source { return i } else { return nil }
+    }
+
+    var ch1FeedbackIndex: Int? {
+        if case .feedback(let i) = ch1Source { return i } else { return nil }
+    }
+
+    var ch2FeedbackIndex: Int? {
+        if case .feedback(let i) = ch2Source { return i } else { return nil }
+    }
+
+    func routeFeedbackTo(_ channel: ActiveChannel, feedbackIndex: Int = 0) {
+        switch channel {
+        case .ch1: ch1Source = .feedback(feedbackIndex)
+        case .ch2: ch2Source = .feedback(feedbackIndex)
+        }
     }
 
     func routeActivePad(_ index: Int) {

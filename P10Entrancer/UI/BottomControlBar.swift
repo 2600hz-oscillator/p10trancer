@@ -4,6 +4,7 @@ struct BottomControlBar: View {
     let pads: PadSystem
     @ObservedObject var mixer: MixerState
     @ObservedObject var keyerSystem: KeyerSystem
+    @ObservedObject var feedbackSystem: FeedbackSystem
     @ObservedObject var ntsc: NTSCState
     @ObservedObject var thermal: ThermalMonitor
     @ObservedObject var recorder: MixerRecorder
@@ -16,6 +17,7 @@ struct BottomControlBar: View {
     @State private var showMixer = false
     @State private var showAutomation = false
     @State private var showKeyerControls = false
+    @State private var showFeedbackControls = false
     @State private var showSession = false
     @State private var endSessionAlertShown = false
     @State private var showSaveBeforeEndAlert = false
@@ -41,6 +43,9 @@ struct BottomControlBar: View {
         }
         .sheet(isPresented: $showKeyerControls) {
             KeyerControlsView(system: keyerSystem, mixer: mixer)
+        }
+        .sheet(isPresented: $showFeedbackControls) {
+            FeedbackControlsView(system: feedbackSystem, mixer: mixer)
         }
         .sheet(isPresented: $showSession) {
             SessionPanelView(store: sessions)
@@ -117,6 +122,7 @@ struct BottomControlBar: View {
             hdmiBlock
             verticalDivider
             keyerControlsButton
+            feedbackControlsButton
             verticalDivider
             ntscBlock
             verticalDivider
@@ -171,6 +177,7 @@ struct BottomControlBar: View {
         switch source {
         case .pad(let i): sub = "PAD \(i + 1)"
         case .keyer(let i): sub = "KEY\(i + 1)"
+        case .feedback(let i): sub = "FB\(i + 1)"
         }
         return Button(action: { mixer.activeChannel = channel }) {
             VStack(spacing: 2) {
@@ -255,6 +262,17 @@ struct BottomControlBar: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12).padding(.vertical, 4)
                 .overlay(Rectangle().strokeBorder(Color.green, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var feedbackControlsButton: some View {
+        Button(action: { showFeedbackControls = true }) {
+            Text("FB CONTROL…")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.purple, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

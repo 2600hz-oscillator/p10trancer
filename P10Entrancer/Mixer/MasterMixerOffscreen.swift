@@ -9,6 +9,7 @@ final class MasterMixerOffscreen: FrameRenderer {
     private let pads: PadSystem
     private let mixer: MixerState
     private let keyers: [KeyerRenderer]
+    private let feedbacks: [FeedbackRenderer]
     private let ntscPipeline: NTSCPipeline
     private let pipeline: MTLRenderPipelineState
     weak var recorder: MixerRecorder?
@@ -16,10 +17,11 @@ final class MasterMixerOffscreen: FrameRenderer {
     private var lastSize: (Int, Int) = (0, 0)
     private var renderTexture: MTLTexture?
 
-    init(pads: PadSystem, mixer: MixerState, keyers: [KeyerRenderer], ntscPipeline: NTSCPipeline) throws {
+    init(pads: PadSystem, mixer: MixerState, keyers: [KeyerRenderer], feedbacks: [FeedbackRenderer], ntscPipeline: NTSCPipeline) throws {
         self.pads = pads
         self.mixer = mixer
         self.keyers = keyers
+        self.feedbacks = feedbacks
         self.ntscPipeline = ntscPipeline
         self.pipeline = try context.makePipeline(
             vertex: "mixerVertex",
@@ -36,9 +38,11 @@ final class MasterMixerOffscreen: FrameRenderer {
     }
 
     func render(frameIndex: UInt64, elapsedTime: CFTimeInterval) {
-        // Fixed order: Keyer 1 then Keyer 2. If a keyer's FG/BG pad is
-        // sourced from another keyer, that pad's texture is the other
-        // keyer's previous-frame outputTexture, giving 1-frame feedback.
+        // Fixed order: feedbacks first (so a keyer pad that sources a feedback
+        // gets fresh data), then keyers. Self-references through pads still
+        // work via 1-frame feedback because each renderer publishes a stable
+        // outputTexture pointer that's read on subsequent frames.
+        for feedback in feedbacks { feedback.render() }
         for keyer in keyers { keyer.render() }
 
         let canvasSize = mixer.outputMode.canvasSize
@@ -96,6 +100,9 @@ final class MasterMixerOffscreen: FrameRenderer {
         case .keyer(let i):
             guard keyers.indices.contains(i) else { return nil }
             return keyers[i].outputTexture
+        case .feedback(let i):
+            guard feedbacks.indices.contains(i) else { return nil }
+            return feedbacks[i].outputTexture
         }
     }
 

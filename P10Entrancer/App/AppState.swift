@@ -10,6 +10,8 @@ final class AppState {
     let mixer = MixerState()
     let keyerSystem = KeyerSystem()
     let keyerRenderers: [KeyerRenderer]
+    let feedbackSystem = FeedbackSystem()
+    let feedbackRenderers: [FeedbackRenderer]
     let ntscState = NTSCState()
     let ntscPipeline: NTSCPipeline
     let masterMixerOffscreen: MasterMixerOffscreen
@@ -39,11 +41,15 @@ final class AppState {
         self.keyerRenderers = keyerSystem.keyers.map {
             try! KeyerRenderer(pads: pads, keyer: $0)
         }
+        self.feedbackRenderers = feedbackSystem.units.map {
+            try! FeedbackRenderer(pads: pads, state: $0)
+        }
         self.ntscPipeline = try! NTSCPipeline(state: ntscState)
         self.masterMixerOffscreen = try! MasterMixerOffscreen(
             pads: pads,
             mixer: mixer,
             keyers: self.keyerRenderers,
+            feedbacks: self.feedbackRenderers,
             ntscPipeline: self.ntscPipeline
         )
 
@@ -213,6 +219,10 @@ final class AppState {
                 if let k = keyerSystem.keyer(at: i) {
                     routed.insert(k.foregroundPadIndex)
                 }
+            case .feedback(let i):
+                if let fb = feedbackSystem.unit(at: i) {
+                    routed.insert(fb.sourcePadIndex)
+                }
             }
         }
         for (i, pad) in pads.pads.enumerated() {
@@ -261,6 +271,13 @@ final class AppState {
         let source = KeyerPadSource(keyerIndex: keyerIndex, renderer: keyerRenderers[keyerIndex])
         pads.setSource(source, at: padIndex)
         P10Logger.log("[AppState] pad \(padIndex + 1) source → Keyer \(keyerIndex + 1)")
+    }
+
+    func setFeedbackSource(feedbackIndex: Int, at padIndex: Int) {
+        guard feedbackRenderers.indices.contains(feedbackIndex) else { return }
+        let source = FeedbackPadSource(feedbackIndex: feedbackIndex, renderer: feedbackRenderers[feedbackIndex])
+        pads.setSource(source, at: padIndex)
+        P10Logger.log("[AppState] pad \(padIndex + 1) source → Feedback \(feedbackIndex + 1)")
     }
 
     func loadUserVideo(from sourceURL: URL, at index: Int) {

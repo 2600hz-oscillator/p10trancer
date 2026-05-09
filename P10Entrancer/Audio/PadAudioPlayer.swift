@@ -2,39 +2,62 @@ import Foundation
 import AVFoundation
 import Combine
 
+/// Per-pad audio output strip. Two source kinds: a video file's looping audio
+/// (for VideoFileSource) and the iPad mic (for camera sources). The
+/// downstream is the same: a private AVAudioMixerNode whose outputVolume
+/// gates the pad's contribution to the master mix; routed=false zeros it.
 @MainActor
 final class PadAudioPlayer: ObservableObject {
-    private let engine: AVAudioEngine
-    private let playerNode = AVAudioPlayerNode()
-    private let mixerNode = AVAudioMixerNode()
-    private var buffer: AVAudioPCMBuffer?
-    private let label: String
-    private var attached = false
+    enum Source {
+        case file(URL)
+        case mic
+    }
 
-    /// User-set volume (0…1). Published so SwiftUI sliders re-render when MIDI
-    /// or any other external source changes the value.
-    @Published var volume: Float = 0.7 {
+    private let engine: AVAudioEngine
+    private let source: Source
+    private let label: String
+
+    private let mixerNode = AVAudioMixerNode()
+    private let playerNode = AVAudioPlayerNode()  // unused for .mic
+    private var buffer: AVAudioPCMBuffer?
+    private var attachedFile = false
+    private var attachedMic = false
+
+    /// Default mic gain is 0 to avoid speaker→mic feedback the moment the
+    /// user routes a camera pad. File pads still default to 0.7.
+    @Published var volume: Float {
         didSet { applyEffectiveVolume() }
     }
     private var isRouted: Bool = false
 
-    init(url: URL, label: String, engine: AVAudioEngine = AudioEngine.shared.engine) {
+    init(source: Source, label: String, engine: AVAudioEngine = AudioEngine.shared.engine) {
         self.engine = engine
+        self.source = source
         self.label = label
-        Task {
-            await self.load(url: url)
+        switch source {
+        case .file: self.volume = 0.7
+        case .mic:  self.volume = 0
+        }
+        switch source {
+        case .file(let url):
+            Task { await self.loadFile(url: url) }
+        case .mic:
+            Task { await self.loadMic() }
         }
     }
 
     deinit {
-        if attached {
+        if attachedFile {
             playerNode.stop()
             engine.detach(playerNode)
             engine.detach(mixerNode)
         }
+        // Mic taps deliberately not torn down here — would need to hop to
+        // MainActor and run disconnect through MicCapture. The leak is
+        // small (one detached mixer node per camera-source lifecycle) and
+        // doesn't affect playback.
     }
 
-    /// Set by the audio router based on whether this pad is currently in CH1 or CH2.
     func setRouted(_ routed: Bool) {
         isRouted = routed
         applyEffectiveVolume()
@@ -44,7 +67,9 @@ final class PadAudioPlayer: ObservableObject {
         mixerNode.outputVolume = isRouted ? volume : 0.0
     }
 
-    private func load(url: URL) async {
+    // MARK: - Source-specific setup
+
+    private func loadFile(url: URL) async {
         do {
             let file = try AVAudioFile(forReading: url)
             let format = file.processingFormat
@@ -65,13 +90,21 @@ final class PadAudioPlayer: ObservableObject {
             engine.connect(playerNode, to: mixerNode, format: format)
             engine.connect(mixerNode, to: engine.mainMixerNode, format: nil)
             applyEffectiveVolume()
-            attached = true
+            attachedFile = true
 
             playerNode.scheduleBuffer(buf, at: nil, options: .loops, completionCallbackType: .dataPlayedBack) { _ in }
             playerNode.play()
-            P10Logger.log("[PadAudioPlayer:\(label)] looping, frames=\(frameCount), default user vol \(volume)")
+            P10Logger.log("[PadAudioPlayer:\(label)] file loop frames=\(frameCount), default user vol \(volume)")
         } catch {
             P10Logger.log("[PadAudioPlayer:\(label)] load failed: \(error)")
         }
+    }
+
+    private func loadMic() async {
+        // Mic capture is currently disabled — was crashing on the iPad's
+        // .playAndRecord engine setup. Cameras are silent for now; the
+        // volume slider is non-functional but visible. We'll restore mic
+        // capture as a separate, testable feature.
+        P10Logger.log("[PadAudioPlayer:\(label)] mic capture disabled (TODO)")
     }
 }

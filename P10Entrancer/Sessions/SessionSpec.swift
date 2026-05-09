@@ -48,7 +48,7 @@ struct SessionSpec: Codable {
     }
 
     struct MixerSpec: Codable {
-        enum SourceKind: String, Codable { case pad, keyer }
+        enum SourceKind: String, Codable { case pad, keyer, feedback }
         struct Source: Codable {
             var kind: SourceKind
             var index: Int

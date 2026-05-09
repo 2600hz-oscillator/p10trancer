@@ -21,7 +21,10 @@ final class PadSlot {
     var aspect: Float { source?.displayAspect ?? (16.0 / 9.0) }
 
     var audioPlayer: PadAudioPlayer? {
-        (source as? VideoFileSource)?.audioPlayer
+        if let v = source as? VideoFileSource     { return v.audioPlayer }
+        if let c = source as? CameraSource        { return c.audioPlayer }
+        if let b = source as? BuiltInCameraSource { return b.audioPlayer }
+        return nil
     }
 
     func processFX(elapsedTime: Float) {

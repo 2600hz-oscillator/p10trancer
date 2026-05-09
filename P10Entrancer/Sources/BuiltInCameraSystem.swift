@@ -169,7 +169,9 @@ final class BuiltInCameraSystem {
 @MainActor
 final class BuiltInCameraSource: NSObject, PadSource {
     private(set) var currentTexture: MTLTexture?
-    private(set) var displayAspect: Float = 16.0 / 9.0
+    let displayAspect: Float = CameraCrop4x3.aspect
+    let audioPlayer: PadAudioPlayer
+    private let crop = CameraCrop4x3()
 
     fileprivate let label: String
     fileprivate var delegate: BuiltInFrameReceiver!
@@ -183,6 +185,7 @@ final class BuiltInCameraSource: NSObject, PadSource {
         var cache: CVMetalTextureCache?
         CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, context.device, nil, &cache)
         self.textureCache = cache
+        self.audioPlayer = PadAudioPlayer(source: .mic, label: "mic-\(label)")
         super.init()
         self.delegate = BuiltInFrameReceiver(owner: self)
     }
@@ -192,22 +195,20 @@ final class BuiltInCameraSource: NSObject, PadSource {
     fileprivate func receive(pixelBuffer: CVPixelBuffer) {
         let w = CVPixelBufferGetWidth(pixelBuffer)
         let h = CVPixelBufferGetHeight(pixelBuffer)
-        if w > 0, h > 0 {
-            let aspect = Float(w) / Float(h)
-            if abs(aspect - displayAspect) > 0.001 { displayAspect = aspect }
-        }
+        guard w > 0, h > 0 else { return }
         guard let cache = textureCache else { return }
         var cvTex: CVMetalTexture?
         let status = CVMetalTextureCacheCreateTextureFromImage(
             kCFAllocatorDefault, cache, pixelBuffer, nil,
             .bgra8Unorm, w, h, 0, &cvTex
         )
-        guard status == kCVReturnSuccess, let cvTex = cvTex else { return }
+        guard status == kCVReturnSuccess, let cvTex = cvTex,
+              let raw = CVMetalTextureGetTexture(cvTex) else { return }
         if currentTexture == nil {
-            print("[BuiltInCameraSource:\(label)] first frame \(w)x\(h)")
+            print("[BuiltInCameraSource:\(label)] first frame \(w)x\(h) → 4:3 cropped")
         }
         retainedCVTexture = cvTex
-        currentTexture = CVMetalTextureGetTexture(cvTex)
+        currentTexture = crop.crop(raw) ?? raw
     }
 }
 

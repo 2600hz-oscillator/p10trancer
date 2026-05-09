@@ -123,6 +123,20 @@ struct PadGridView: View {
                 } label: {
                     Label("Keyer", systemImage: "rectangle.on.rectangle")
                 }
+                Menu {
+                    Button {
+                        AppState.shared.setFeedbackSource(feedbackIndex: 0, at: index)
+                    } label: {
+                        Label("Feedback 1", systemImage: "1.square.fill")
+                    }
+                    Button {
+                        AppState.shared.setFeedbackSource(feedbackIndex: 1, at: index)
+                    } label: {
+                        Label("Feedback 2", systemImage: "2.square.fill")
+                    }
+                } label: {
+                    Label("Feedback (Camera)", systemImage: "arrow.triangle.swap")
+                }
                 Button {
                     AppState.shared.setMasterFeedbackSource(at: index)
                 } label: {

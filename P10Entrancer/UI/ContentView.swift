@@ -49,6 +49,7 @@ struct ContentView: View {
                     pads: appState.pads,
                     mixer: appState.mixer,
                     keyerSystem: appState.keyerSystem,
+                    feedbackSystem: appState.feedbackSystem,
                     ntsc: appState.ntscState,
                     thermal: appState.thermalMonitor,
                     recorder: appState.recorder,

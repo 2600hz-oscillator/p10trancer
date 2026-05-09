@@ -203,15 +203,17 @@ enum SessionCapture {
 
     private static func encodeChannel(_ source: ChannelSource) -> SessionSpec.MixerSpec.Source {
         switch source {
-        case .pad(let i):    return .init(kind: .pad, index: i)
-        case .keyer(let i):  return .init(kind: .keyer, index: i)
+        case .pad(let i):       return .init(kind: .pad, index: i)
+        case .keyer(let i):     return .init(kind: .keyer, index: i)
+        case .feedback(let i):  return .init(kind: .feedback, index: i)
         }
     }
 
     private static func decodeChannel(_ source: SessionSpec.MixerSpec.Source) -> ChannelSource {
         switch source.kind {
-        case .pad:   return .pad(source.index)
-        case .keyer: return .keyer(source.index)
+        case .pad:      return .pad(source.index)
+        case .keyer:    return .keyer(source.index)
+        case .feedback: return .feedback(source.index)
         }
     }
 

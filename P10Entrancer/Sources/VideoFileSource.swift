@@ -28,7 +28,7 @@ final class VideoFileSource: PadSource {
         if cache == nil {
             print("[VideoFileSource] CVMetalTextureCacheCreate failed status=\(cacheStatus)")
         }
-        self.audioPlayer = PadAudioPlayer(url: url, label: url.lastPathComponent)
+        self.audioPlayer = PadAudioPlayer(source: .file(url), label: url.lastPathComponent)
         Task { [weak self] in
             await self?.startReader()
         }
