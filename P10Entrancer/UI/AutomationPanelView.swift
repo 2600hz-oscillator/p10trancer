@@ -148,7 +148,7 @@ struct AutomationPanelView: View {
             .padding(.vertical, 8)
 
             if engine.takes.isEmpty {
-                Text("No takes yet. Arm record, hit play in Bitwig, perform, hit stop.")
+                Text("No takes yet. Arm record, hit play on your MIDI clock source, perform, hit stop.")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.4))
                     .padding(20)

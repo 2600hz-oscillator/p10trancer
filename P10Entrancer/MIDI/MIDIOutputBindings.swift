@@ -3,7 +3,7 @@ import Combine
 
 /// Subscribes to all relevant app state and emits matching MIDI events
 /// when the state changes. Used to publish a virtual MIDI source so a
-/// host (Bitwig, etc.) can record iPad gestures as automation.
+/// host (any DAW) can record iPad gestures as automation.
 @MainActor
 final class MIDIOutputBindings {
     weak var sink: MIDISink?

@@ -309,7 +309,7 @@ final class AutomationEngine: ObservableObject {
         // Re-perform on iPad: feed back through the router so MIDIBindings runs
         // its mute-during-inbound path and updates UI state.
         router?.inject(bytes: bytes)
-        // Mirror to Bitwig so the DAW sees the playback too.
+        // Mirror to the DAW so it sees the playback too.
         output?.send(bytes)
     }
 
