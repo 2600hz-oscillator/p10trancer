@@ -47,6 +47,13 @@ final class AutomationEngine: ObservableObject {
     private var playbackStartTime: TimeInterval = 0
     private var playbackTimer: Timer?
 
+    /// Drives recording / playback when the user pressed START (no external
+    /// MIDI Clock available). Currently fixed at 90 BPM = 360ms/beat ÷ 24 PPQ
+    /// = 15ms per tick.
+    private static let internalBPM: Double = 90
+    private static let internalTickPeriod: TimeInterval = 60.0 / internalBPM / 24.0
+    private var internalClock: Timer?
+
     private weak var router: MIDIRouter?
     private weak var output: MIDISink?
 
@@ -100,8 +107,47 @@ final class AutomationEngine: ObservableObject {
         case .playing: stopPlayback()
         default: break
         }
+        stopInternalClock()
         state = .idle
         P10Logger.log("[Automation] disarmed → idle")
+    }
+
+    /// START recording immediately without waiting for external MIDI Clock /
+    /// Start. Drives the tick counter from a Timer at 90 BPM. Stops on user
+    /// disarm or on incoming 0xFC.
+    func startRecordingNow() {
+        guard state == .idle || state == .armedPlayback || state == .armedRecord else { return }
+        overdubBaseTakeId = (overdubEnabled ? selectedTakeId : nil)
+        state = .armedRecord
+        startInternalClock()
+        startTransport(fromBeginning: true)
+        P10Logger.log("[Automation] START rec (internal clock @ 90 BPM)")
+    }
+
+    /// START playback immediately of the selected take without waiting for
+    /// external MIDI Clock / Start. Internal clock at 90 BPM.
+    func startPlaybackNow() {
+        guard let id = selectedTakeId, takes.contains(where: { $0.id == id }) else { return }
+        guard state == .idle || state == .armedRecord || state == .armedPlayback else { return }
+        state = .armedPlayback
+        startInternalClock()
+        startTransport(fromBeginning: true)
+        P10Logger.log("[Automation] START play (internal clock @ 90 BPM)")
+    }
+
+    private func startInternalClock() {
+        stopInternalClock()
+        let period = Self.internalTickPeriod
+        internalClock = Timer.scheduledTimer(withTimeInterval: period, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.tickClock()
+            }
+        }
+    }
+
+    private func stopInternalClock() {
+        internalClock?.invalidate()
+        internalClock = nil
     }
 
     // MARK: - Capture from outbound emissions (gestures)
@@ -214,6 +260,7 @@ final class AutomationEngine: ObservableObject {
         playbackTimer = nil
         playbackEvents.removeAll()
         playbackEventCursor = 0
+        stopInternalClock()
 
         guard save && !newEvents.isEmpty else {
             P10Logger.log("[Automation] recording discarded (events=\(newEvents.count), save=\(save))")
@@ -318,6 +365,7 @@ final class AutomationEngine: ObservableObject {
         playbackTimer = nil
         playbackEvents.removeAll()
         playbackEventCursor = 0
+        stopInternalClock()
         state = .idle
         P10Logger.log("[Automation] playback stopped")
     }

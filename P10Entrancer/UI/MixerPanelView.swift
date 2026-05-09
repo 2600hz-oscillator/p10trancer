@@ -25,7 +25,11 @@ struct MixerPanelView: View {
 
             HStack(alignment: .top, spacing: 8) {
                 ForEach(0..<PadSystem.padCount, id: \.self) { i in
-                    channelStrip(index: i)
+                    PadChannelStripView(
+                        index: i,
+                        pad: pads.pads[i],
+                        mixer: mixer
+                    )
                 }
                 Rectangle().fill(Color.white.opacity(0.14)).frame(width: 1)
                 masterStrip
@@ -35,35 +39,6 @@ struct MixerPanelView: View {
         }
         .background(.black)
         .preferredColorScheme(.dark)
-    }
-
-    private func channelStrip(index: Int) -> some View {
-        let isCh1 = mixer.ch1PadIndex == index
-        let isCh2 = mixer.ch2PadIndex == index
-        let pad = pads.pads[index]
-        let routedColor: Color = isCh1 ? .cyan : (isCh2 ? .orange : Color.white.opacity(0.18))
-        let routedLabel: String = isCh1 ? "CH1" : (isCh2 ? "CH2" : "—")
-        return VStack(spacing: 6) {
-            Text(routedLabel)
-                .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                .foregroundStyle(routedColor)
-                .frame(width: 56, height: 16)
-                .background(routedColor.opacity(isCh1 || isCh2 ? 0.25 : 0))
-            VerticalSlider(
-                value: Binding(
-                    get: { pad.audioPlayer?.volume ?? 0 },
-                    set: { pad.audioPlayer?.volume = $0 }
-                ),
-                tint: routedColor
-            )
-            .frame(width: 56, height: 220)
-            Text(String(format: "%.2f", pad.audioPlayer?.volume ?? 0))
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
-            Text("PAD \(index + 1)")
-                .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                .foregroundStyle(.white)
-        }
     }
 
     private var masterStrip: some View {
@@ -84,6 +59,73 @@ struct MixerPanelView: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.7))
             Text("OUT")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+        }
+    }
+}
+
+/// Per-pad strip in the mixer panel. Wraps the audio player as an
+/// `@ObservedObject` so SwiftUI re-renders the slider when MIDI (or any
+/// other source) changes the volume — fixes the "knob doesn't follow"
+/// bug where audio worked but the on-screen thumb stayed put.
+private struct PadChannelStripView: View {
+    let index: Int
+    let pad: PadSlot
+    @ObservedObject var mixer: MixerState
+
+    var body: some View {
+        if let player = pad.audioPlayer {
+            content(player: player)
+        } else {
+            placeholder
+        }
+    }
+
+    @ViewBuilder
+    private func content(player: PadAudioPlayer) -> some View {
+        InnerStrip(index: index, mixer: mixer, player: player)
+    }
+
+    private var placeholder: some View {
+        VStack(spacing: 6) {
+            Text("—")
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.18))
+                .frame(width: 56, height: 16)
+            Rectangle().fill(Color.white.opacity(0.04)).frame(width: 56, height: 220)
+            Text("0.00")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.3))
+            Text("PAD \(index + 1)")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+    }
+}
+
+private struct InnerStrip: View {
+    let index: Int
+    @ObservedObject var mixer: MixerState
+    @ObservedObject var player: PadAudioPlayer
+
+    var body: some View {
+        let isCh1 = mixer.ch1PadIndex == index
+        let isCh2 = mixer.ch2PadIndex == index
+        let routedColor: Color = isCh1 ? .cyan : (isCh2 ? .orange : Color.white.opacity(0.18))
+        let routedLabel: String = isCh1 ? "CH1" : (isCh2 ? "CH2" : "—")
+        VStack(spacing: 6) {
+            Text(routedLabel)
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .foregroundStyle(routedColor)
+                .frame(width: 56, height: 16)
+                .background(routedColor.opacity(isCh1 || isCh2 ? 0.25 : 0))
+            VerticalSlider(value: $player.volume, tint: routedColor)
+                .frame(width: 56, height: 220)
+            Text(String(format: "%.2f", player.volume))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.5))
+            Text("PAD \(index + 1)")
                 .font(.system(size: 11, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white)
         }

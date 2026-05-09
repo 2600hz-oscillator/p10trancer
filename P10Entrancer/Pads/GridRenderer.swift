@@ -47,6 +47,8 @@ final class GridRenderer: NSObject, FrameRenderer, MTKViewDelegate {
         let drawableH = Float(view.drawableSize.height)
         let cellAspect: Float = (drawableW / 3.0) / max(drawableH / 3.0, 1)
         var params = GridParamsBuffer(cellAspect: cellAspect, _pad0: 0, _pad1: 0, _pad2: 0)
+        var aspects: [Float] = pads.pads.map { $0.aspect }
+        while aspects.count < 9 { aspects.append(16.0 / 9.0) }
 
         encoder.setRenderPipelineState(pipeline)
         let blank = context.blankTexture
@@ -54,6 +56,7 @@ final class GridRenderer: NSObject, FrameRenderer, MTKViewDelegate {
             encoder.setFragmentTexture(pads.pads[i].texture ?? blank, index: i)
         }
         encoder.setFragmentBytes(&params, length: MemoryLayout<GridParamsBuffer>.size, index: 0)
+        encoder.setFragmentBytes(&aspects, length: MemoryLayout<Float>.size * 9, index: 1)
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         encoder.endEncoding()
         cmd.present(drawable)

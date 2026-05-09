@@ -56,35 +56,49 @@ struct AutomationPanelView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 10) {
-            actionButton(
-                title: engine.state == .recording ? "RECORDING…" : (engine.overdubEnabled && engine.selectedTakeId != nil ? "ARM OVERDUB" : "ARM REC"),
-                tint: .red,
-                isActive: engine.state == .armedRecord || engine.state == .recording
-            ) {
-                if engine.state == .armedRecord || engine.state == .recording {
-                    engine.disarm()
-                } else {
-                    engine.armRecord()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                actionButton(
+                    title: engine.state == .recording ? "RECORDING…" : (engine.overdubEnabled && engine.selectedTakeId != nil ? "ARM OVERDUB" : "ARM REC"),
+                    tint: .red,
+                    isActive: engine.state == .armedRecord || engine.state == .recording
+                ) {
+                    if engine.state == .armedRecord || engine.state == .recording {
+                        engine.disarm()
+                    } else {
+                        engine.armRecord()
+                    }
                 }
-            }
-            actionButton(
-                title: engine.state == .playing ? "PLAYING…" : "ARM PLAY",
-                tint: .green,
-                isActive: engine.state == .armedPlayback || engine.state == .playing,
-                disabled: engine.selectedTakeId == nil
-            ) {
-                if engine.state == .armedPlayback || engine.state == .playing {
-                    engine.disarm()
-                } else {
-                    engine.armPlayback()
+                actionButton(title: "START REC", tint: .red, isActive: false) {
+                    engine.startRecordingNow()
                 }
+                actionButton(
+                    title: engine.state == .playing ? "PLAYING…" : "ARM PLAY",
+                    tint: .green,
+                    isActive: engine.state == .armedPlayback || engine.state == .playing,
+                    disabled: engine.selectedTakeId == nil
+                ) {
+                    if engine.state == .armedPlayback || engine.state == .playing {
+                        engine.disarm()
+                    } else {
+                        engine.armPlayback()
+                    }
+                }
+                actionButton(title: "START PLAY", tint: .green, isActive: false, disabled: engine.selectedTakeId == nil) {
+                    engine.startPlaybackNow()
+                }
+                Spacer()
+                overdubToggle
             }
-            overdubToggle
-            Spacer()
-            Text("Tick: \(engine.currentTick)")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.6))
+            HStack(spacing: 10) {
+                Text("ARM = wait for external MIDI Clock + Start. START = run on internal clock @ 90 BPM.")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.45))
+                Spacer()
+                Text("Tick: \(engine.currentTick)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

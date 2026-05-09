@@ -2,6 +2,7 @@ import AVFoundation
 import CoreVideo
 import Metal
 import QuartzCore
+import UIKit
 
 @MainActor
 final class BuiltInCameraSystem {
@@ -10,6 +11,8 @@ final class BuiltInCameraSystem {
 
     private let session: AVCaptureMultiCamSession
     private let queue = DispatchQueue(label: "p10e.multicam", qos: .userInitiated)
+    private var connections: [(connection: AVCaptureConnection, position: AVCaptureDevice.Position)] = []
+    private var orientationObserver: NSObjectProtocol?
 
     init?() {
         guard AVCaptureMultiCamSession.isMultiCamSupported else {
@@ -19,32 +22,89 @@ final class BuiltInCameraSystem {
         let session = AVCaptureMultiCamSession()
         self.session = session
 
-        let backResult = Self.attach(
+        let backAttach = Self.attach(
             session: session,
             position: .back,
             label: "back",
             queue: queue,
             context: .shared
         )
-        let frontResult = Self.attach(
+        let frontAttach = Self.attach(
             session: session,
             position: .front,
             label: "front",
             queue: queue,
             context: .shared
         )
-        self.backSource = backResult
-        self.frontSource = frontResult
+        self.backSource = backAttach?.source
+        self.frontSource = frontAttach?.source
+        if let c = backAttach?.connection { connections.append((c, .back)) }
+        if let c = frontAttach?.connection { connections.append((c, .front)) }
 
-        if backResult == nil && frontResult == nil {
+        if backSource == nil && frontSource == nil {
             print("[BuiltInCameraSystem] could not attach any built-in camera")
             return nil
+        }
+
+        // Mirror the front camera so it reads as a "selfie" (the way users
+        // expect — text/face left-right consistent with what they see).
+        for (connection, position) in connections where position == .front {
+            if connection.isVideoMirroringSupported { connection.isVideoMirrored = true }
+        }
+        applyAngleForCurrentOrientation()
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        orientationObserver = NotificationCenter.default.addObserver(
+            forName: UIDevice.orientationDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.applyAngleForCurrentOrientation() }
         }
 
         queue.async { [session] in
             session.startRunning()
         }
-        print("[BuiltInCameraSystem] running with back=\(backResult != nil) front=\(frontResult != nil)")
+        print("[BuiltInCameraSystem] running with back=\(backSource != nil) front=\(frontSource != nil)")
+    }
+
+    deinit {
+        if let token = orientationObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+    }
+
+    /// Map physical device orientation + camera position to AVCaptureConnection
+    /// videoRotationAngle (degrees, CCW from sensor native). Updates every
+    /// camera so cameras stay right-side-up as the user rotates the iPad.
+    private func applyAngleForCurrentOrientation() {
+        let orientation = UIDevice.current.orientation
+        for (connection, position) in connections {
+            let angle = Self.angle(forDevice: orientation, position: position)
+            if connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
+            }
+        }
+    }
+
+    private static func angle(forDevice orientation: UIDeviceOrientation,
+                              position: AVCaptureDevice.Position) -> CGFloat {
+        // Front camera uses Apple's standard videoRotationAngle table.
+        // Back camera's sensor "up" direction is mounted such that its native
+        // frame matches the front camera's only in portrait — in landscape the
+        // two halves of the table are swapped. Empirically verified on iPad
+        // Pro M2: back portrait=90 ✓, back landscape needs the inverse of
+        // front's landscape values.
+        switch (orientation, position) {
+        case (.portrait, _):                       return 90
+        case (.portraitUpsideDown, _):             return 270
+        case (.landscapeLeft, .front):             return 180
+        case (.landscapeLeft, .back):              return 0
+        case (.landscapeRight, .front):            return 0
+        case (.landscapeRight, .back):             return 180
+        default:
+            return 90
+        }
     }
 
     private static func attach(
@@ -53,7 +113,7 @@ final class BuiltInCameraSystem {
         label: String,
         queue: DispatchQueue,
         context: MetalContext
-    ) -> BuiltInCameraSource? {
+    ) -> (source: BuiltInCameraSource, connection: AVCaptureConnection)? {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
             print("[BuiltInCameraSystem:\(label)] no device for position \(position.rawValue)")
             return nil
@@ -94,14 +154,11 @@ final class BuiltInCameraSystem {
             }
             session.addConnection(connection)
 
-            let angle: CGFloat = 0
-            if connection.isVideoRotationAngleSupported(angle) {
-                connection.videoRotationAngle = angle
-            }
-
+            // Initial angle is set by `applyAngleForCurrentOrientation()` once
+            // the system is wired up; updated on every device rotation event.
             let source = BuiltInCameraSource(label: label, context: context)
             output.setSampleBufferDelegate(source.delegate, queue: queue)
-            return source
+            return (source, connection)
         } catch {
             print("[BuiltInCameraSystem:\(label)] error: \(error)")
             return nil

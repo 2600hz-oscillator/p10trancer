@@ -33,7 +33,8 @@ fragment half4 gridFragment(
     texture2d<half> p6 [[texture(6)]],
     texture2d<half> p7 [[texture(7)]],
     texture2d<half> p8 [[texture(8)]],
-    constant GridParams &params [[buffer(0)]]
+    constant GridParams &params [[buffer(0)]],
+    constant float *padAspects [[buffer(1)]]
 ) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
     float2 uv = in.uv;
@@ -41,10 +42,10 @@ fragment half4 gridFragment(
     float2 inCell = fract(uv * 3.0);
     int idx = int(cell.y) * 3 + int(cell.x);
 
-    // Aspect-fit: each cell on screen has aspect = params.cellAspect, source is 16:9 = 1.778.
-    // If cell wider than source: letterbox horizontally (pillarbox); shrink uv.x toward center.
-    // If cell taller than source: letterbox vertically.
-    float srcAspect = 16.0 / 9.0;
+    // Aspect-fit each pad's actual source aspect into its cell. Cameras after
+    // a portrait rotation arrive at ~9:16; bundled clips at 16:9; etc.
+    float srcAspect = padAspects[idx];
+    if (srcAspect <= 0.0) { srcAspect = 16.0 / 9.0; }
     float scaleX = 1.0;
     float scaleY = 1.0;
     if (params.cellAspect > srcAspect) {
