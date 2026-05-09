@@ -12,13 +12,25 @@ final class AudioAppender {
     private var formatDescription: CMAudioFormatDescription?
     private var mainFormat: AVAudioFormat?
     private var sampleRate: Double = 48_000
-    private var framesWritten: Int64 = 0
     private var enabled: Bool = false
     private var includeMic: Bool = false
     private var micQueue: MicBufferQueue?
     private var micGain: Float = 0
     private var micConverter: AVAudioConverter?
     private var micConverterIn: AVAudioFormat?
+    /// `mach_absolute_time()` captured at REC start. Audio PTS is
+    /// derived from `(audioTime.hostTime - recordStartHostTime)`
+    /// converted to seconds, so audio aligns with the same wall-clock
+    /// origin video uses. Without this, audio PTS started at 0 with
+    /// the first tap buffer (which arrives ~85ms after REC) while
+    /// video started at 0 with the first frame (~16ms after REC),
+    /// putting audio 50-70ms behind video in the recording.
+    private var recordStartHostTime: UInt64 = 0
+    private static let timebase: mach_timebase_info_data_t = {
+        var tb = mach_timebase_info_data_t()
+        mach_timebase_info(&tb)
+        return tb
+    }()
     private let queue = DispatchQueue(label: "p10e.recorder.audio", qos: .userInitiated)
 
     /// Build a writer input + format description for the given engine output
@@ -54,14 +66,15 @@ final class AudioAppender {
     func configure(input: AVAssetWriterInput,
                    formatDescription: CMAudioFormatDescription,
                    sampleRate: Double,
-                   mainFormat: AVAudioFormat) {
+                   mainFormat: AVAudioFormat,
+                   recordStartHostTime: UInt64) {
         lock.lock()
         defer { lock.unlock() }
         self.input = input
         self.formatDescription = formatDescription
         self.sampleRate = sampleRate
         self.mainFormat = mainFormat
-        self.framesWritten = 0
+        self.recordStartHostTime = recordStartHostTime
     }
 
     func setEnabled(_ on: Bool) {
@@ -93,6 +106,16 @@ final class AudioAppender {
         input?.markAsFinished()
     }
 
+    /// Block until every CMSampleBuffer that's already been dispatched
+    /// to the writer queue has actually been appended. Without this,
+    /// `MixerRecorder.stop()` would call `markAsFinished` while ~50ms
+    /// of audio buffers were still pending — they'd land after the
+    /// input was sealed and get silently dropped, cutting off the end
+    /// of every recording.
+    func flushPendingAppends() {
+        queue.sync {}
+    }
+
     private var diagnosticCounter: Int = 0
 
     /// Continuously-updated RMS of the most recent buffer the persistent
@@ -102,8 +125,11 @@ final class AudioAppender {
     /// audio thread can write it without locking.
     private(set) var lastBufferRMS: Float = 0
 
-    /// Tap callback. Runs on the audio render thread.
-    func handle(_ buffer: AVAudioPCMBuffer) {
+    /// Tap callback. Runs on the audio render thread. `audioTime` is
+    /// the AVAudioTime from the tap; its `hostTime` indexes the
+    /// mach_absolute_time clock and lets us compute a PTS aligned to
+    /// `recordStartHostTime` — which video also anchors on.
+    func handle(_ buffer: AVAudioPCMBuffer, audioTime: AVAudioTime) {
         let frames = CMItemCount(buffer.frameLength)
         guard frames > 0 else { return }
         diagnosticCounter &+= 1
@@ -121,13 +147,26 @@ final class AudioAppender {
               let formatDescription = formatDescription,
               let input = input,
               let mainFormat = mainFormat,
-              sampleRate > 0 else {
+              sampleRate > 0,
+              recordStartHostTime > 0 else {
             lock.unlock()
             return
         }
-        let pts = CMTime(value: framesWritten, timescale: Int32(sampleRate))
+        // Drop buffers captured before REC started — their hostTime is
+        // older than the anchor, which would underflow the unsigned
+        // subtraction and produce a wildly large PTS.
+        guard audioTime.hostTime >= recordStartHostTime else {
+            lock.unlock()
+            return
+        }
+        // Convert mach_absolute_time delta to seconds, then build a
+        // CMTime PTS at the audio sample rate's timescale.
+        let hostDelta = audioTime.hostTime - recordStartHostTime
+        let nanos = Double(hostDelta) * Double(Self.timebase.numer) / Double(Self.timebase.denom)
+        let elapsedSeconds = nanos / 1_000_000_000.0
+        let ptsValue = Int64(elapsedSeconds * sampleRate)
+        let pts = CMTime(value: ptsValue, timescale: Int32(sampleRate))
         let duration = CMTime(value: 1, timescale: Int32(sampleRate))
-        framesWritten += Int64(frames)
         let mixMicNow = includeMic
         let micQueue = self.micQueue
         let micGain = self.micGain

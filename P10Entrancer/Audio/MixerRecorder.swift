@@ -15,8 +15,14 @@ final class MixerRecorder: ObservableObject {
     private var pixelAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     private var pixelBufferPool: CVPixelBufferPool?
     private var startTime: CMTime?
-    private var frameCount: Int64 = 0
-    private let frameDuration = CMTime(value: 1, timescale: 30)
+    /// Wall-time of the first captured frame. All subsequent video PTS
+    /// is derived from `(elapsedTime - recordStartElapsed)` so that
+    /// even when rendering falls below 30fps, the file's video track
+    /// stays the same length as the audio track. Without this, video
+    /// PTS advanced at ~33ms per frame regardless of real elapsed
+    /// time — a slow renderer made the video track shorter than audio
+    /// in the saved file.
+    private var recordStartElapsed: CFTimeInterval?
     private var lastFrameAppendTime: CFTimeInterval = 0
     private var canvasSize: (Int, Int) = (1280, 720)
 
@@ -47,8 +53,8 @@ final class MixerRecorder: ObservableObject {
             P10Logger.log("[MixerRecorder] mainMixer not ready (sr=0); deferring tap")
             return
         }
-        mixer.installTap(onBus: 0, bufferSize: 4096, format: format) { [appender = audioAppender] buffer, _ in
-            appender.handle(buffer)
+        mixer.installTap(onBus: 0, bufferSize: 4096, format: format) { [appender = audioAppender] buffer, time in
+            appender.handle(buffer, audioTime: time)
         }
         persistentTapInstalled = true
         persistentTapFormat = format
@@ -105,13 +111,19 @@ final class MixerRecorder: ObservableObject {
             let inputFormat = persistentTapFormat
                 ?? AudioEngine.shared.engine.mainMixerNode.outputFormat(forBus: 0)
             var addedAudio = false
+            // Capture wall-clock NOW for both audio and video PTS
+            // origin. A/V derived from the same anchor stays in sync
+            // regardless of when the first buffer/frame actually
+            // arrives at the writer.
+            let recordStartHostTime = mach_absolute_time()
             if let (audioWriterInput, fmtDesc) = AudioAppender.makeInput(format: inputFormat),
                writer.canAdd(audioWriterInput) {
                 writer.add(audioWriterInput)
                 audioAppender.configure(input: audioWriterInput,
                                         formatDescription: fmtDesc,
                                         sampleRate: inputFormat.sampleRate,
-                                        mainFormat: inputFormat)
+                                        mainFormat: inputFormat,
+                                        recordStartHostTime: recordStartHostTime)
                 addedAudio = true
             } else {
                 P10Logger.log("[MixerRecorder] could not configure audio input — recording video only")
@@ -128,7 +140,15 @@ final class MixerRecorder: ObservableObject {
             self.pixelAdaptor = adaptor
             self.pixelBufferPool = adaptor.pixelBufferPool
             self.startTime = .zero
-            self.frameCount = 0
+            // Same anchor the audio appender uses (CACurrentMediaTime
+            // and mach_absolute_time share the host clock — converting
+            // host ticks to seconds via mach_timebase yields exactly
+            // CACurrentMediaTime). Capturing both before any media
+            // arrives guarantees A/V stay in sync even if the first
+            // video frame and first audio buffer arrive at different
+            // times after REC.
+            self.recordStartElapsed = CACurrentMediaTime()
+            self.lastFrameAppendTime = 0
             self.lastRecordingURL = url
             self.isRecording = true
 
@@ -155,6 +175,11 @@ final class MixerRecorder: ObservableObject {
         audioAppender.setEnabled(false)
         audioAppender.setMicMix(queue: nil, gain: 0)
         MicCapture.shared.queue.clear()
+        // Wait for the appender's serial dispatch queue to drain any
+        // already-built CMSampleBuffers into the writer. Without this,
+        // those last ~50ms of buffers are dropped after markAsFinished
+        // — that's the "audio cuts out before the end" symptom.
+        audioAppender.flushPendingAppends()
 
         guard let writer = writer, let input = videoInput, let url = lastRecordingURL else { return }
         input.markAsFinished()
@@ -178,6 +203,10 @@ final class MixerRecorder: ObservableObject {
         let interval = 1.0 / 30.0
         if lastFrameAppendTime > 0 && (elapsedTime - lastFrameAppendTime) < interval { return }
         lastFrameAppendTime = elapsedTime
+
+        // recordStartElapsed was anchored at REC start in start() so
+        // both audio and video PTS share the same wall-clock origin.
+        let elapsedSinceStart = elapsedTime - (recordStartElapsed ?? elapsedTime)
 
         let w = source.width
         let h = source.height
@@ -205,9 +234,9 @@ final class MixerRecorder: ObservableObject {
         cmd.commit()
         cmd.waitUntilCompleted()
 
-        let pts = CMTimeMultiply(frameDuration, multiplier: Int32(frameCount))
+        // 600 timescale (NTSC/PAL-friendly LCM of 24/25/30).
+        let pts = CMTime(seconds: elapsedSinceStart, preferredTimescale: 600)
         adaptor.append(pixelBuffer, withPresentationTime: pts)
-        frameCount += 1
     }
 
 }

@@ -122,6 +122,14 @@ final class AppState {
         screenshotCapturer.start()
         wireMasterVolume()
         wireAudioRouting()
+        // Always start silent. Without this, a saved session with a
+        // non-zero masterVolume would blast audio on launch — which is
+        // exactly the regression the user hit when wireMasterVolume
+        // started propagating session-loaded values into the engine.
+        // Run AFTER wireMasterVolume so the Combine sink also flips
+        // the engine to 0.
+        mixer.masterVolume = 0
+        AudioEngine.shared.masterVolume = 0
     }
 
     /// On launch, after factory bundled clips are loaded, replay the user's
