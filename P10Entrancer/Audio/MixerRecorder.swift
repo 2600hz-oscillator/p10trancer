@@ -19,6 +19,10 @@ final class MixerRecorder: ObservableObject {
     private let frameDuration = CMTime(value: 1, timescale: 30)
     private var lastFrameAppendTime: CFTimeInterval = 0
     private var canvasSize: (Int, Int) = (1280, 720)
+
+    private let audioAppender = AudioAppender()
+    private var tappedNode: AVAudioMixerNode?
+
     var onFinish: ((URL) -> Void)?
 
     func toggle() {
@@ -42,6 +46,8 @@ final class MixerRecorder: ObservableObject {
         let (w, h) = canvasSize
         do {
             let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+
+            // Video
             let videoSettings: [String: Any] = [
                 AVVideoCodecKey: AVVideoCodecType.h264,
                 AVVideoWidthKey: w,
@@ -69,6 +75,22 @@ final class MixerRecorder: ObservableObject {
                 return
             }
             writer.add(videoInput)
+
+            // Audio — match the live engine's mainMixerNode output format
+            let mixer = AudioEngine.shared.engine.mainMixerNode
+            let inputFormat = mixer.outputFormat(forBus: 0)
+            var addedAudio = false
+            if let (audioWriterInput, fmtDesc) = AudioAppender.makeInput(format: inputFormat),
+               writer.canAdd(audioWriterInput) {
+                writer.add(audioWriterInput)
+                audioAppender.configure(input: audioWriterInput,
+                                        formatDescription: fmtDesc,
+                                        sampleRate: inputFormat.sampleRate)
+                addedAudio = true
+            } else {
+                P10Logger.log("[MixerRecorder] could not configure audio input — recording video only")
+            }
+
             guard writer.startWriting() else {
                 P10Logger.log("[MixerRecorder] startWriting failed: \(String(describing: writer.error))")
                 return
@@ -83,7 +105,13 @@ final class MixerRecorder: ObservableObject {
             self.frameCount = 0
             self.lastRecordingURL = url
             self.isRecording = true
-            P10Logger.log("[MixerRecorder] started: \(url.lastPathComponent) \(w)x\(h)")
+
+            if addedAudio {
+                audioAppender.setEnabled(true)
+                installAudioTap(on: mixer, format: inputFormat)
+                self.tappedNode = mixer
+            }
+            P10Logger.log("[MixerRecorder] started: \(url.lastPathComponent) \(w)x\(h) audio=\(addedAudio ? "yes" : "no")")
         } catch {
             P10Logger.log("[MixerRecorder] writer init failed: \(error)")
         }
@@ -92,8 +120,17 @@ final class MixerRecorder: ObservableObject {
     func stop() {
         guard isRecording else { return }
         isRecording = false
+
+        // Cut audio off first to avoid late buffers landing after finish.
+        audioAppender.setEnabled(false)
+        if let node = tappedNode {
+            node.removeTap(onBus: 0)
+            tappedNode = nil
+        }
+
         guard let writer = writer, let input = videoInput, let url = lastRecordingURL else { return }
         input.markAsFinished()
+        audioAppender.markFinished()
         writer.finishWriting { [weak self] in
             guard let self else { return }
             Task { @MainActor in
@@ -143,5 +180,11 @@ final class MixerRecorder: ObservableObject {
         let pts = CMTimeMultiply(frameDuration, multiplier: Int32(frameCount))
         adaptor.append(pixelBuffer, withPresentationTime: pts)
         frameCount += 1
+    }
+
+    private func installAudioTap(on node: AVAudioMixerNode, format: AVAudioFormat) {
+        node.installTap(onBus: 0, bufferSize: 4096, format: format) { [appender = audioAppender] buffer, _ in
+            appender.handle(buffer)
+        }
     }
 }

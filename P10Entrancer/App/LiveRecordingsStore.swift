@@ -52,16 +52,20 @@ final class LiveRecordingsStore: ObservableObject {
         recent[idx] = rec
     }
 
-    /// If a thumbnail is selected, route its recording to the given pad and
-    /// clear the selection. Channels follow because they reference the pad
-    /// by index.
+    /// If a thumbnail is selected, route its recording to the given pad,
+    /// also route that pad to the active channel so audio is unmuted, and
+    /// clear the selection.
     func loadIntoPad(_ padIndex: Int) -> Bool {
         guard let id = selectedID,
               let rec = recent.first(where: { $0.id == id }) else { return false }
         guard pads.pads.indices.contains(padIndex) else { return false }
         pads.setSource(VideoFileSource(url: rec.url), at: padIndex)
+        // Auto-route to the active channel — pads that aren't routed are
+        // muted, and not routing here was a common footgun ("I assigned
+        // the recording but I can't hear it").
+        mixer.routeActivePad(padIndex)
         selectedID = nil
-        P10Logger.log("[LiveRecordings] routed \(rec.url.lastPathComponent) → pad \(padIndex + 1)")
+        P10Logger.log("[LiveRecordings] routed \(rec.url.lastPathComponent) → pad \(padIndex + 1) → \(mixer.activeChannel == .ch1 ? "CH1" : "CH2")")
         return true
     }
 
