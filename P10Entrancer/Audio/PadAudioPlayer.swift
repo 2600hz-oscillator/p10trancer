@@ -101,10 +101,11 @@ final class PadAudioPlayer: ObservableObject {
     }
 
     private func loadMic() async {
-        // Mic capture is currently disabled — was crashing on the iPad's
-        // .playAndRecord engine setup. Cameras are silent for now; the
-        // volume slider is non-functional but visible. We'll restore mic
-        // capture as a separate, testable feature.
-        P10Logger.log("[PadAudioPlayer:\(label)] mic capture disabled (TODO)")
+        // No-op stub. Mic capture lives entirely inside MixerRecorder /
+        // MicCapture as a tap-based path; this PadAudioPlayer instance
+        // exists only so the camera pad has an ObservableObject for the
+        // mixer panel slider. Volume here drives MicCapture.cameraGain
+        // via AppState.applyAudioRouting → see that for the wiring.
+        P10Logger.log("[PadAudioPlayer:\(label)] mic stub (capture lives in MicCapture)")
     }
 }

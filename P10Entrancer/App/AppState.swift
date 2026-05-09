@@ -225,8 +225,21 @@ final class AppState {
                 }
             }
         }
+        // Aggregate mic gain across routed camera pads. Max-of-volumes so
+        // multiple cameras don't pile up onto the recording.
+        var micGain: Float = 0
         for (i, pad) in pads.pads.enumerated() {
-            pad.audioPlayer?.setRouted(routed.contains(i))
+            let isRouted = routed.contains(i)
+            pad.audioPlayer?.setRouted(isRouted)
+            if isRouted, pad.source is CameraSource || pad.source is BuiltInCameraSource,
+               let v = pad.audioPlayer?.volume {
+                micGain = max(micGain, v)
+            }
+        }
+        MicCapture.shared.recordGain = micGain
+        // If a recording is currently in progress, propagate the new gain.
+        if recorder.isRecording {
+            recorder.audioAppender.setMicMix(queue: MicCapture.shared.queue, gain: micGain)
         }
     }
 

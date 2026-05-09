@@ -19,13 +19,19 @@ final class AudioEngine {
         guard !started else { return }
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            // .playAndRecord lets MicCapture later install a tap on
+            // engine.inputNode for recording. .defaultToSpeaker keeps the
+            // loud speakers as the default output route (otherwise the
+            // category routes to the receiver-style speaker).
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.mixWithOthers, .defaultToSpeaker]
+            )
             try session.setActive(true)
         } catch {
             P10Logger.log("[AudioEngine] AVAudioSession config failed: \(error)")
         }
-        // Touch mainMixerNode before start() so the engine creates its output node graph;
-        // start() asserts otherwise on a fresh engine with no attached nodes.
         engine.mainMixerNode.outputVolume = 0.7
         do {
             try engine.start()

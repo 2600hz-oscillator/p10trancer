@@ -20,7 +20,7 @@ final class MixerRecorder: ObservableObject {
     private var lastFrameAppendTime: CFTimeInterval = 0
     private var canvasSize: (Int, Int) = (1280, 720)
 
-    private let audioAppender = AudioAppender()
+    let audioAppender = AudioAppender()
     private var tappedNode: AVAudioMixerNode?
 
     var onFinish: ((URL) -> Void)?
@@ -76,7 +76,7 @@ final class MixerRecorder: ObservableObject {
             }
             writer.add(videoInput)
 
-            // Audio — match the live engine's mainMixerNode output format
+            // Audio — match the live engine's mainMixerNode output format.
             let mixer = AudioEngine.shared.engine.mainMixerNode
             let inputFormat = mixer.outputFormat(forBus: 0)
             var addedAudio = false
@@ -85,7 +85,8 @@ final class MixerRecorder: ObservableObject {
                 writer.add(audioWriterInput)
                 audioAppender.configure(input: audioWriterInput,
                                         formatDescription: fmtDesc,
-                                        sampleRate: inputFormat.sampleRate)
+                                        sampleRate: inputFormat.sampleRate,
+                                        mainFormat: inputFormat)
                 addedAudio = true
             } else {
                 P10Logger.log("[MixerRecorder] could not configure audio input — recording video only")
@@ -110,6 +111,15 @@ final class MixerRecorder: ObservableObject {
                 audioAppender.setEnabled(true)
                 installAudioTap(on: mixer, format: inputFormat)
                 self.tappedNode = mixer
+                // Kick off mic capture (idempotent). It might not be ready
+                // yet — the queue stays empty until samples arrive. The
+                // appender's mic-mix gracefully handles an empty queue.
+                Task { @MainActor in
+                    await MicCapture.shared.ensureRunning()
+                    let gain = MicCapture.shared.recordGain
+                    self.audioAppender.setMicMix(queue: MicCapture.shared.queue, gain: gain)
+                    P10Logger.log("[MixerRecorder] mic mix gain=\(gain) ready=\(MicCapture.shared.isReady)")
+                }
             }
             P10Logger.log("[MixerRecorder] started: \(url.lastPathComponent) \(w)x\(h) audio=\(addedAudio ? "yes" : "no")")
         } catch {
@@ -123,6 +133,8 @@ final class MixerRecorder: ObservableObject {
 
         // Cut audio off first to avoid late buffers landing after finish.
         audioAppender.setEnabled(false)
+        audioAppender.setMicMix(queue: nil, gain: 0)
+        MicCapture.shared.queue.clear()
         if let node = tappedNode {
             node.removeTap(onBus: 0)
             tappedNode = nil
