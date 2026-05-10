@@ -85,11 +85,19 @@ final class LiveRecordingsStore: ObservableObject {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 320, height: 180)
+        // Allow the generator to snap to the nearest available frame.
+        // Default tolerances are zero (exact match required); since
+        // recordings now use real-wall-clock PTS, no frame lands at
+        // exactly 0.1s and the generator returns failed → the
+        // thumbnail spinner never resolves.
+        generator.requestedTimeToleranceBefore = .positiveInfinity
+        generator.requestedTimeToleranceAfter = .positiveInfinity
         return await withCheckedContinuation { cont in
-            generator.generateCGImagesAsynchronously(forTimes: [NSValue(time: CMTime(seconds: 0.1, preferredTimescale: 600))]) { _, cg, _, _, _ in
+            generator.generateCGImagesAsynchronously(forTimes: [NSValue(time: CMTime(seconds: 0.1, preferredTimescale: 600))]) { _, cg, _, result, error in
                 if let cg = cg {
                     cont.resume(returning: UIImage(cgImage: cg))
                 } else {
+                    P10Logger.log("[LiveRecordings] thumbnail failed: result=\(result.rawValue) err=\(String(describing: error))")
                     cont.resume(returning: nil)
                 }
             }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PadGridView: View {
-    let pads: PadSystem
+    @ObservedObject var pads: PadSystem
     @ObservedObject var mixer: MixerState
     @ObservedObject var liveRecordings: LiveRecordingsStore
     @ObservedObject var cameras: CameraRegistry

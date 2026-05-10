@@ -12,20 +12,23 @@ final class AudioAppender {
     private var formatDescription: CMAudioFormatDescription?
     private var mainFormat: AVAudioFormat?
     private var sampleRate: Double = 48_000
+    private var framesWritten: Int64 = 0
     private var enabled: Bool = false
     private var includeMic: Bool = false
     private var micQueue: MicBufferQueue?
     private var micGain: Float = 0
     private var micConverter: AVAudioConverter?
     private var micConverterIn: AVAudioFormat?
-    /// `mach_absolute_time()` captured at REC start. Audio PTS is
-    /// derived from `(audioTime.hostTime - recordStartHostTime)`
-    /// converted to seconds, so audio aligns with the same wall-clock
-    /// origin video uses. Without this, audio PTS started at 0 with
-    /// the first tap buffer (which arrives ~85ms after REC) while
-    /// video started at 0 with the first frame (~16ms after REC),
-    /// putting audio 50-70ms behind video in the recording.
+    /// `mach_absolute_time()` at REC start, set by configure(). Combined
+    /// with the first `handle()` call's mach time, it yields the PTS
+    /// offset of the first audio sample so audio aligns with video
+    /// (both use the same wall-clock origin).
     private var recordStartHostTime: UInt64 = 0
+    /// Becomes true once we've found the first audio buffer that
+    /// began capturing AT or AFTER REC press. Buffers before then
+    /// (tap was mid-fill at REC) are dropped so the file's first
+    /// audio sample lines up with REC press in wall time.
+    private var firstSamplePTSResolved: Bool = false
     private static let timebase: mach_timebase_info_data_t = {
         var tb = mach_timebase_info_data_t()
         mach_timebase_info(&tb)
@@ -74,7 +77,9 @@ final class AudioAppender {
         self.formatDescription = formatDescription
         self.sampleRate = sampleRate
         self.mainFormat = mainFormat
+        self.framesWritten = 0
         self.recordStartHostTime = recordStartHostTime
+        self.firstSamplePTSResolved = false
     }
 
     func setEnabled(_ on: Bool) {
@@ -125,10 +130,7 @@ final class AudioAppender {
     /// audio thread can write it without locking.
     private(set) var lastBufferRMS: Float = 0
 
-    /// Tap callback. Runs on the audio render thread. `audioTime` is
-    /// the AVAudioTime from the tap; its `hostTime` indexes the
-    /// mach_absolute_time clock and lets us compute a PTS aligned to
-    /// `recordStartHostTime` — which video also anchors on.
+    /// Tap callback. Runs on the audio render thread.
     func handle(_ buffer: AVAudioPCMBuffer, audioTime: AVAudioTime) {
         let frames = CMItemCount(buffer.frameLength)
         guard frames > 0 else { return }
@@ -147,26 +149,35 @@ final class AudioAppender {
               let formatDescription = formatDescription,
               let input = input,
               let mainFormat = mainFormat,
-              sampleRate > 0,
-              recordStartHostTime > 0 else {
+              sampleRate > 0 else {
             lock.unlock()
             return
         }
-        // Drop buffers captured before REC started — their hostTime is
-        // older than the anchor, which would underflow the unsigned
-        // subtraction and produce a wildly large PTS.
-        guard audioTime.hostTime >= recordStartHostTime else {
-            lock.unlock()
-            return
+        // Drop buffers whose first sample was captured BEFORE REC (the
+        // tap was already filling a buffer when the user pressed REC).
+        // Without this, the partial pre-REC buffer ends up as audio
+        // before video appears — perceived as audio leading. The
+        // writer's edit list aligns audio first PTS to 0 regardless,
+        // so the only way to keep audio in sync with video is to
+        // ensure the first kept buffer was captured AT or AFTER REC.
+        if !firstSamplePTSResolved && recordStartHostTime > 0 {
+            let now = mach_absolute_time()
+            let delta = (now > recordStartHostTime) ? (now - recordStartHostTime) : 0
+            let nanos = Double(delta) * Double(Self.timebase.numer) / Double(Self.timebase.denom)
+            let elapsedSec = nanos / 1_000_000_000.0
+            let bufferDurationSec = Double(buffer.frameLength) / sampleRate
+            if elapsedSec - bufferDurationSec < 0 {
+                lock.unlock()
+                return
+            }
+            firstSamplePTSResolved = true
         }
-        // Convert mach_absolute_time delta to seconds, then build a
-        // CMTime PTS at the audio sample rate's timescale.
-        let hostDelta = audioTime.hostTime - recordStartHostTime
-        let nanos = Double(hostDelta) * Double(Self.timebase.numer) / Double(Self.timebase.denom)
-        let elapsedSeconds = nanos / 1_000_000_000.0
-        let ptsValue = Int64(elapsedSeconds * sampleRate)
-        let pts = CMTime(value: ptsValue, timescale: Int32(sampleRate))
+        // PTS = framesWritten / sampleRate. First kept buffer is at
+        // PTS=0; both audio and video tracks have first PTS=0 in the
+        // file so the player shows them in sync.
+        let pts = CMTime(value: framesWritten, timescale: Int32(sampleRate))
         let duration = CMTime(value: 1, timescale: Int32(sampleRate))
+        framesWritten += Int64(frames)
         let mixMicNow = includeMic
         let micQueue = self.micQueue
         let micGain = self.micGain

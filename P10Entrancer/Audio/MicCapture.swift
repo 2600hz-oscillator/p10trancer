@@ -8,7 +8,7 @@ import AVFoundation
 /// engine has its own graph, so installing a tap on its inputNode
 /// doesn't disturb playback.
 @MainActor
-final class MicCapture {
+final class MicCapture: ObservableObject {
     static let shared = MicCapture()
 
     private(set) var isReady = false
@@ -16,6 +16,10 @@ final class MicCapture {
     /// `AppState.applyAudioRouting()` based on routed camera pads' sliders.
     /// 0 = mic excluded from recordings; 1 = full level.
     @Published var recordGain: Float = 0
+    /// Latest RMS of incoming mic samples, [0...1]. Pads that show a
+    /// camera source watch this for a live VU meter so the user can
+    /// confirm the mic is picking up audio (and at what level).
+    @Published private(set) var inputLevel: Float = 0
     let queue = MicBufferQueue()
 
     /// Dedicated mic engine. Started only after permission is granted.
@@ -53,8 +57,19 @@ final class MicCapture {
         // playback engine. format: nil lets AVFoundation resolve from
         // the live route.
         let queue = self.queue
-        micEngine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, _ in
+        micEngine.inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
             queue.push(buffer)
+            // Compute the buffer's RMS for the VU meter and push to
+            // MainActor so SwiftUI views can observe @Published changes.
+            // Cheap to compute on the audio thread; small per-frame
+            // hop to main is fine at the tap's natural rate (~10/s).
+            if let ch0 = buffer.floatChannelData?[0] {
+                var sum: Float = 0
+                let n = Int(buffer.frameLength)
+                for i in 0..<n { sum += ch0[i] * ch0[i] }
+                let rms = sqrtf(sum / Float(max(1, n)))
+                Task { @MainActor [weak self] in self?.inputLevel = rms }
+            }
         }
         tapInstalled = true
         do {

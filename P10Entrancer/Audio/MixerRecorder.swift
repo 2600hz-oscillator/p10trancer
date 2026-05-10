@@ -30,6 +30,13 @@ final class MixerRecorder: ObservableObject {
     private var persistentTapInstalled = false
     private var persistentTapFormat: AVAudioFormat?
 
+    /// Resolves the current mic gain at REC time. AppState wires this
+    /// to walk routed camera pads and pull `audioPlayer.volume`. Without
+    /// it, REC reads a stale `MicCapture.shared.recordGain` because
+    /// nothing forces `applyAudioRouting` to run when the user moves
+    /// only the camera pad's volume slider.
+    var micGainProvider: (() -> Float)?
+
     var onFinish: ((URL) -> Void)?
 
     func toggle() {
@@ -111,10 +118,10 @@ final class MixerRecorder: ObservableObject {
             let inputFormat = persistentTapFormat
                 ?? AudioEngine.shared.engine.mainMixerNode.outputFormat(forBus: 0)
             var addedAudio = false
-            // Capture wall-clock NOW for both audio and video PTS
-            // origin. A/V derived from the same anchor stays in sync
-            // regardless of when the first buffer/frame actually
-            // arrives at the writer.
+            // Capture mach time anchor BEFORE the writer starts so the
+            // appender's first audio buffer can compute its PTS as a
+            // real-time offset from REC press, matching the video PTS
+            // origin (which uses CACurrentMediaTime — same clock).
             let recordStartHostTime = mach_absolute_time()
             if let (audioWriterInput, fmtDesc) = AudioAppender.makeInput(format: inputFormat),
                writer.canAdd(audioWriterInput) {
@@ -140,20 +147,26 @@ final class MixerRecorder: ObservableObject {
             self.pixelAdaptor = adaptor
             self.pixelBufferPool = adaptor.pixelBufferPool
             self.startTime = .zero
-            // Same anchor the audio appender uses (CACurrentMediaTime
-            // and mach_absolute_time share the host clock — converting
-            // host ticks to seconds via mach_timebase yields exactly
-            // CACurrentMediaTime). Capturing both before any media
-            // arrives guarantees A/V stay in sync even if the first
-            // video frame and first audio buffer arrive at different
-            // times after REC.
-            self.recordStartElapsed = CACurrentMediaTime()
+            // Anchored on the FIRST captured frame, not at REC press.
+            // Both audio and video tracks then start at PTS=0 in the
+            // file (audio drops pre-REC buffers; video uses its first
+            // frame as origin). The writer's edit list normalizes both
+            // to playback time 0, keeping them in sync.
+            self.recordStartElapsed = nil
             self.lastFrameAppendTime = 0
             self.lastRecordingURL = url
             self.isRecording = true
 
             if addedAudio {
-                let gain = MicCapture.shared.recordGain
+                // Resolve gain right now from the actual pad state.
+                // MicCapture.shared.recordGain can be stale if the user
+                // moved a camera pad's volume slider without triggering
+                // applyAudioRouting (sliders change audioPlayer.volume
+                // but don't fire the routing recompute). Falling back
+                // to recordGain preserves prior behavior for paths that
+                // do keep it current.
+                let gain = micGainProvider?() ?? MicCapture.shared.recordGain
+                MicCapture.shared.recordGain = gain
                 self.audioAppender.setMicMix(queue: MicCapture.shared.queue, gain: gain)
                 audioAppender.setEnabled(true)
                 P10Logger.log("[MixerRecorder] mic mix gain=\(gain) ready=\(MicCapture.shared.isReady)")
@@ -204,9 +217,15 @@ final class MixerRecorder: ObservableObject {
         if lastFrameAppendTime > 0 && (elapsedTime - lastFrameAppendTime) < interval { return }
         lastFrameAppendTime = elapsedTime
 
-        // recordStartElapsed was anchored at REC start in start() so
-        // both audio and video PTS share the same wall-clock origin.
-        let elapsedSinceStart = elapsedTime - (recordStartElapsed ?? elapsedTime)
+        // Anchor wall-time origin on the FIRST captured frame so
+        // video first PTS=0 in the file, mirroring audio's PTS=0
+        // first kept buffer. Subsequent frames advance by real
+        // elapsed time so the file's video duration tracks wall
+        // clock (vs. assuming exactly 30fps via frame_index/30,
+        // which made video shorter than audio under load).
+        let now = CACurrentMediaTime()
+        if recordStartElapsed == nil { recordStartElapsed = now }
+        let elapsedSinceStart = now - (recordStartElapsed ?? now)
 
         let w = source.width
         let h = source.height

@@ -78,6 +78,24 @@ final class AppState {
             guard let self else { return }
             self.liveRecordings.insert(url: url)
         }
+        // Walk routed camera pads at REC time and take the max of their
+        // volume sliders as the mic gain. Sidesteps the stale-gain bug
+        // where moving only a camera-pad's volume doesn't fire
+        // applyAudioRouting.
+        self.recorder.micGainProvider = { [weak self] in
+            guard let self else { return 0 }
+            let routed = self.routedPadIndices()
+            var gain: Float = 0
+            for i in routed {
+                guard self.pads.pads.indices.contains(i) else { continue }
+                let pad = self.pads.pads[i]
+                if pad.source is CameraSource || pad.source is BuiltInCameraSource,
+                   let v = pad.audioPlayer?.volume {
+                    gain = max(gain, v)
+                }
+            }
+            return gain
+        }
 
         RenderEngine.shared.register(self.masterMixerOffscreen)
     }
@@ -248,7 +266,10 @@ final class AppState {
         applyAudioRouting()
     }
 
-    func applyAudioRouting() {
+    /// Pad indices currently feeding either output channel. Used by
+    /// applyAudioRouting and by the recorder's mic-gain provider so
+    /// both stay in sync.
+    func routedPadIndices() -> Set<Int> {
         var routed = Set<Int>()
         for source in [mixer.ch1Source, mixer.ch2Source] {
             switch source {
@@ -264,6 +285,11 @@ final class AppState {
                 }
             }
         }
+        return routed
+    }
+
+    func applyAudioRouting() {
+        let routed = routedPadIndices()
         // Aggregate mic gain across routed camera pads. Max-of-volumes so
         // multiple cameras don't pile up onto the recording.
         var micGain: Float = 0

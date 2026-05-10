@@ -9,15 +9,38 @@ struct PadFooterControls: View {
     let padIndex: Int
 
     var body: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                playStopButton
-                muteButton
+        ZStack(alignment: .bottomTrailing) {
+            // VU meter on camera pads — confirms the mic is picking up
+            // signal so the user knows whether their voice is being
+            // captured into recordings.
+            if pad.source is CameraSource || pad.source is BuiltInCameraSource {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Text("MIC")
+                            .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(.black.opacity(0.6))
+                        MicVUMeter()
+                            .frame(width: 80, height: 14)
+                        Spacer()
+                    }
+                    .padding(.bottom, 24)
+                    .padding(.leading, 6)
+                }
             }
-            .padding(.bottom, 24) // clear of the pad-number chip
-            .padding(.trailing, 6)
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    playStopButton
+                    muteButton
+                }
+                .padding(.bottom, 24) // clear of the pad-number chip
+                .padding(.trailing, 6)
+            }
         }
     }
 
@@ -73,6 +96,37 @@ private struct VideoPlayStopIcon: View {
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Tiny live VU meter for the iPad mic, sourced from
+/// MicCapture.shared.inputLevel. Fills left-to-right with a soft
+/// gradient; pure visual indicator, no interaction.
+private struct MicVUMeter: View {
+    @ObservedObject var mic = MicCapture.shared
+
+    var body: some View {
+        GeometryReader { geo in
+            // Mic RMS sits in a small range under normal speech (~0.05).
+            // Scale by 6× and clamp so quiet voices still show movement.
+            let level = min(1.0, max(0, mic.inputLevel * 6.0))
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(.black.opacity(0.7))
+                    .overlay(
+                        Rectangle()
+                            .strokeBorder(.white.opacity(0.4), lineWidth: 1)
+                    )
+                LinearGradient(
+                    colors: [.green, .yellow, .red],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: geo.size.width * CGFloat(level))
+                .padding(1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 2))
+        }
     }
 }
 
