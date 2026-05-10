@@ -37,6 +37,13 @@ final class MixerRecorder: ObservableObject {
     /// only the camera pad's volume slider.
     var micGainProvider: (() -> Float)?
 
+    /// Resolves the full list of auxiliary audio sources to mix into
+    /// the recording (each routed camera contributes its own queue —
+    /// either UVC embedded audio for cams that have it enabled, or
+    /// iPad mic for the rest). If nil, falls back to the single-source
+    /// micGainProvider path.
+    var auxSourcesProvider: (() -> [AudioAppender.AudioSource])?
+
     var onFinish: ((URL) -> Void)?
 
     func toggle() {
@@ -158,18 +165,23 @@ final class MixerRecorder: ObservableObject {
             self.isRecording = true
 
             if addedAudio {
-                // Resolve gain right now from the actual pad state.
-                // MicCapture.shared.recordGain can be stale if the user
-                // moved a camera pad's volume slider without triggering
-                // applyAudioRouting (sliders change audioPlayer.volume
-                // but don't fire the routing recompute). Falling back
-                // to recordGain preserves prior behavior for paths that
-                // do keep it current.
-                let gain = micGainProvider?() ?? MicCapture.shared.recordGain
-                MicCapture.shared.recordGain = gain
-                self.audioAppender.setMicMix(queue: MicCapture.shared.queue, gain: gain)
+                // Per-camera audio: each routed camera contributes its
+                // own source (UVC embedded or iPad mic), so multiple
+                // cameras can record their own audio simultaneously.
+                // Falls back to the single-source path if no provider
+                // is wired (e.g., in unit tests).
+                let auxes = auxSourcesProvider?() ?? []
+                if auxes.isEmpty {
+                    let gain = micGainProvider?() ?? MicCapture.shared.recordGain
+                    MicCapture.shared.recordGain = gain
+                    self.audioAppender.setMicMix(queue: MicCapture.shared.queue, gain: gain)
+                    P10Logger.log("[MixerRecorder] mic mix (fallback) gain=\(gain) ready=\(MicCapture.shared.isReady)")
+                } else {
+                    self.audioAppender.setAuxSources(auxes)
+                    let summary = auxes.map { "\($0.label)@\(String(format: "%.2f", $0.gain))" }.joined(separator: ",")
+                    P10Logger.log("[MixerRecorder] aux audio sources: \(summary)")
+                }
                 audioAppender.setEnabled(true)
-                P10Logger.log("[MixerRecorder] mic mix gain=\(gain) ready=\(MicCapture.shared.isReady)")
             }
             P10Logger.log("[MixerRecorder] started: \(url.lastPathComponent) \(w)x\(h) audio=\(addedAudio ? "yes" : "no")")
         } catch {

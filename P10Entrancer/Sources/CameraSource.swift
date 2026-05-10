@@ -4,7 +4,7 @@ import Metal
 import QuartzCore
 
 @MainActor
-final class CameraSource: NSObject, PadSource {
+final class CameraSource: NSObject, PadSource, ObservableObject {
     private(set) var currentTexture: MTLTexture?
     let displayAspect: Float = CameraCrop4x3.aspect
     let audioPlayer: PadAudioPlayer
@@ -19,11 +19,23 @@ final class CameraSource: NSObject, PadSource {
     let label: String
     let deviceID: String
 
+    /// Embedded-audio capture for this camera (UVC audio device paired
+    /// with the video device — Elgato Cam Link's HDMI audio, USB webcam
+    /// built-in mic, etc.). When `useEmbeddedAudio` is true and the
+    /// recorder is running, this camera's buffers are mixed into the
+    /// recording. When false (default), iPad mic via MicCapture is used.
+    let audioCapture: CameraAudioCapture
+    @Published var useEmbeddedAudio: Bool = false
+    /// nil if no paired audio device was discovered when the session
+    /// was set up. Used to grey out the embedded-audio toggle in UI.
+    var hasEmbeddedAudio: Bool { audioCapture.pairedDeviceName != nil }
+
     init?(device: AVCaptureDevice, label: String, context: MetalContext = .shared) {
         self.context = context
         self.label = label
         self.deviceID = device.uniqueID
         self.audioPlayer = PadAudioPlayer(source: .mic, label: "mic-\(label)")
+        self.audioCapture = CameraAudioCapture(label: label)
         super.init()
 
         var cache: CVMetalTextureCache?
@@ -69,6 +81,11 @@ final class CameraSource: NSObject, PadSource {
                     connection.videoRotationAngle = angle
                 }
             }
+
+            // Try to attach the paired audio device (e.g., Cam Link's
+            // HDMI audio). Failure is non-fatal — the camera works
+            // video-only and useEmbeddedAudio just stays unavailable.
+            _ = audioCapture.attach(to: session, pairedWith: device)
 
             session.commitConfiguration()
 

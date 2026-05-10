@@ -13,7 +13,9 @@ struct PadFooterControls: View {
             // VU meter on camera pads — confirms the mic is picking up
             // signal so the user knows whether their voice is being
             // captured into recordings.
-            if pad.source is CameraSource || pad.source is BuiltInCameraSource {
+            if let cam = pad.source as? CameraSource {
+                CameraAudioStrip(cam: cam)
+            } else if pad.source is BuiltInCameraSource {
                 VStack {
                     Spacer()
                     HStack(spacing: 4) {
@@ -96,6 +98,70 @@ private struct VideoPlayStopIcon: View {
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Camera-pad audio strip: shows MIC or HDMI label + VU meter + a
+/// tap target on the label to toggle embedded audio (when the camera
+/// has a paired UVC audio device).
+private struct CameraAudioStrip: View {
+    @ObservedObject var cam: CameraSource
+
+    var body: some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 4) {
+                Button {
+                    if cam.hasEmbeddedAudio { cam.useEmbeddedAudio.toggle() }
+                } label: {
+                    Text(cam.useEmbeddedAudio ? "HDMI" : "MIC")
+                        .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(cam.useEmbeddedAudio
+                                    ? Color.green.opacity(0.8)
+                                    : Color.black.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .disabled(!cam.hasEmbeddedAudio)
+                .opacity(cam.hasEmbeddedAudio ? 1.0 : 0.5)
+                if cam.useEmbeddedAudio {
+                    CameraEmbeddedVUMeter(capture: cam.audioCapture)
+                        .frame(width: 80, height: 14)
+                } else {
+                    MicVUMeter()
+                        .frame(width: 80, height: 14)
+                }
+                Spacer()
+            }
+            .padding(.bottom, 24)
+            .padding(.leading, 6)
+        }
+    }
+}
+
+/// VU meter driven by a specific CameraAudioCapture's `inputLevel`.
+/// Same visual as MicVUMeter; different source.
+private struct CameraEmbeddedVUMeter: View {
+    @ObservedObject var capture: CameraAudioCapture
+
+    var body: some View {
+        GeometryReader { geo in
+            let level = min(1.0, max(0, capture.inputLevel * 6.0))
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(.black.opacity(0.7))
+                    .overlay(Rectangle().strokeBorder(.white.opacity(0.4), lineWidth: 1))
+                LinearGradient(
+                    colors: [.green, .yellow, .red],
+                    startPoint: .leading, endPoint: .trailing
+                )
+                .frame(width: geo.size.width * CGFloat(level))
+                .padding(1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 2))
+        }
     }
 }
 

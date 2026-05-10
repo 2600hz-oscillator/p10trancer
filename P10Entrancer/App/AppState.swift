@@ -96,6 +96,36 @@ final class AppState {
             }
             return gain
         }
+        // Build the full aux-source list at REC time: each routed
+        // camera contributes its OWN audio (embedded UVC audio if the
+        // camera has it enabled, else iPad mic at that camera's
+        // volume). Multiple cameras can record simultaneously, each
+        // with its own audio path.
+        self.recorder.auxSourcesProvider = { [weak self] in
+            guard let self else { return [] }
+            let routed = self.routedPadIndices()
+            var sources: [AudioAppender.AudioSource] = []
+            var nonEmbeddedMicGain: Float = 0
+            for i in routed {
+                guard self.pads.pads.indices.contains(i) else { continue }
+                let pad = self.pads.pads[i]
+                guard let vol = pad.audioPlayer?.volume, vol > 0 else { continue }
+                if let cam = pad.source as? CameraSource,
+                   cam.useEmbeddedAudio, cam.hasEmbeddedAudio {
+                    sources.append(.init(queue: cam.audioCapture.queue,
+                                         gain: vol,
+                                         label: "cam-embedded-\(cam.label)"))
+                } else if pad.source is CameraSource || pad.source is BuiltInCameraSource {
+                    nonEmbeddedMicGain = max(nonEmbeddedMicGain, vol)
+                }
+            }
+            if nonEmbeddedMicGain > 0 {
+                sources.append(.init(queue: MicCapture.shared.queue,
+                                     gain: nonEmbeddedMicGain,
+                                     label: "ipad-mic"))
+            }
+            return sources
+        }
 
         RenderEngine.shared.register(self.masterMixerOffscreen)
     }

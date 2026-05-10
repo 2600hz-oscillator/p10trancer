@@ -121,6 +121,23 @@ final class MicBufferQueue {
         return buffers.isEmpty ? nil : buffers.removeFirst()
     }
 
+    /// Returns the most recent buffer, discarding everything older.
+    /// AudioAppender uses this for aux sources (camera embedded audio
+    /// in particular) because USB audio capture buffers fire at ~21ms
+    /// chunks while the recorder's mainMixer tap fires every ~85ms;
+    /// popOldest would let the queue cap-fill and end up with
+    /// ~250ms+ of recorded latency. popLatest trades audio
+    /// continuity (we drop ~3 of every 4 chunks) for near-zero
+    /// latency, which is the right call until we add proper buffer
+    /// concatenation + resampling on the aux path.
+    func popLatest() -> AVAudioPCMBuffer? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let latest = buffers.last else { return nil }
+        buffers.removeAll()
+        return latest
+    }
+
     func clear() {
         lock.lock()
         buffers.removeAll()
