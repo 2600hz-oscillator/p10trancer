@@ -17,6 +17,15 @@ git-lfs.pkg-path = "git-lfs"
 gradle.pkg-path = "gradle"
 openjdk.pkg-path = "openjdk"
 gh.pkg-path = "gh"
+# Python + PyJWT for App Store Connect API JWT signing (ES256 with the
+# .p8 key) — used by scripts/asc.sh to drive TestFlight setup. Isolated
+# to its own pkg-group so its python version doesn't fight openjdk etc.
+pyjwt.pkg-path = "python311Packages.pyjwt"
+pyjwt.pkg-group = "asc"
+requests.pkg-path = "python311Packages.requests"
+requests.pkg-group = "asc"
+cryptography.pkg-path = "python311Packages.cryptography"
+cryptography.pkg-group = "asc"
 # gum.pkg-path = "gum"
 # gum.version = "^0.14.5"
 
