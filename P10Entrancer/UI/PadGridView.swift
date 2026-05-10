@@ -110,34 +110,9 @@ struct PadGridView: View {
                 } label: {
                     Label("Camera", systemImage: "camera")
                 }
-                Menu {
-                    Button {
-                        AppState.shared.setKeyerSource(keyerIndex: 0, at: index)
-                    } label: {
-                        Label("Keyer 1", systemImage: "1.square")
-                    }
-                    Button {
-                        AppState.shared.setKeyerSource(keyerIndex: 1, at: index)
-                    } label: {
-                        Label("Keyer 2", systemImage: "2.square")
-                    }
-                } label: {
-                    Label("Keyer", systemImage: "rectangle.on.rectangle")
-                }
-                Menu {
-                    Button {
-                        AppState.shared.setFeedbackSource(feedbackIndex: 0, at: index)
-                    } label: {
-                        Label("Feedback 1", systemImage: "1.square.fill")
-                    }
-                    Button {
-                        AppState.shared.setFeedbackSource(feedbackIndex: 1, at: index)
-                    } label: {
-                        Label("Feedback 2", systemImage: "2.square.fill")
-                    }
-                } label: {
-                    Label("Feedback (Camera)", systemImage: "arrow.triangle.swap")
-                }
+                // Keyer / feedback as pad sources removed: those now
+                // live as their own output pads in the row beneath the
+                // 3×3 grid. Cameras stay assignable.
                 Button {
                     AppState.shared.setMasterFeedbackSource(at: index)
                 } label: {

@@ -127,17 +127,25 @@ final class MIDIBindingsTests: XCTestCase {
         XCTAssertEqual(mixer.masterVolume, 96.0/127.0, accuracy: 0.001)
     }
 
-    func test_cc3_keyer_threshold_propagates_to_state() {
+    func test_cc3_drives_only_master_chroma_threshold_not_keyers() {
+        // Snapshot keyer threshold so we can check it didn't move.
+        let before = keyer.threshold
         bindings.handleCC(cc: 3, value: 95)
-        XCTAssertEqual(mixer.keyThreshold, 95.0/127.0, accuracy: 0.001)
-        XCTAssertEqual(keyer.threshold, 95.0/127.0, accuracy: 0.001)
+        XCTAssertEqual(mixer.keyThreshold, 95.0/127.0, accuracy: 0.001,
+                       "CC 3 must drive the master mixer's chroma-transition threshold")
+        XCTAssertEqual(keyer.threshold, before, accuracy: 0.001,
+                       "CC 3 must NOT touch the keyers — those have their own setup sliders")
     }
 
-    func test_cc4_keyer_softness_scales() {
+    func test_cc4_drives_only_master_chroma_softness_not_keyers() {
+        let before = keyer.softness
         bindings.handleCC(cc: 4, value: 127)
-        XCTAssertEqual(keyer.softness, 0.5, accuracy: 0.001)
+        XCTAssertEqual(mixer.keySoftness, 0.5, accuracy: 0.001,
+                       "CC 4 must drive the master mixer's chroma-transition softness")
+        XCTAssertEqual(keyer.softness, before, accuracy: 0.001,
+                       "CC 4 must NOT touch the keyers")
         bindings.handleCC(cc: 4, value: 0)
-        XCTAssertEqual(keyer.softness, 0.001, accuracy: 0.001)
+        XCTAssertEqual(mixer.keySoftness, 0.001, accuracy: 0.001)
     }
 
     // MARK: - CC: NTSC FX

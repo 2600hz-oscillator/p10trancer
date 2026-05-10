@@ -20,16 +20,36 @@ enum KeyerKind: Int, CaseIterable, Identifiable {
 @MainActor
 final class KeyerState: ObservableObject {
     @Published var isEnabled: Bool = false
-    @Published var foregroundPadIndex: Int
-    @Published var backgroundPadIndex: Int
+    @Published var foregroundSource: SourceRef
+    @Published var backgroundSource: SourceRef
     @Published var kind: KeyerKind = .chroma
     @Published var threshold: Float = 0.35
     @Published var softness: Float = 0.1
     @Published var keyColor: SIMD3<Float> = .init(0, 1, 0)
 
-    init(foregroundPadIndex: Int = 7, backgroundPadIndex: Int = 8) {
-        self.foregroundPadIndex = foregroundPadIndex
-        self.backgroundPadIndex = backgroundPadIndex
+    init(foregroundSource: SourceRef = .pad(7), backgroundSource: SourceRef = .pad(8)) {
+        self.foregroundSource = foregroundSource
+        self.backgroundSource = backgroundSource
+    }
+
+    /// Backward-compat shims used by MIDI / sessions that still index
+    /// pads as Int. Returns the pad index when the source is .pad,
+    /// otherwise the previous (or default) value. Setting always coerces
+    /// to .pad(newValue).
+    var foregroundPadIndex: Int {
+        get {
+            if case .pad(let i) = foregroundSource { return i }
+            return 0
+        }
+        set { foregroundSource = .pad(newValue) }
+    }
+
+    var backgroundPadIndex: Int {
+        get {
+            if case .pad(let i) = backgroundSource { return i }
+            return 1
+        }
+        set { backgroundSource = .pad(newValue) }
     }
 }
 
@@ -42,8 +62,8 @@ final class KeyerSystem: ObservableObject {
 
     init() {
         self.keyers = [
-            KeyerState(foregroundPadIndex: 6, backgroundPadIndex: 7),
-            KeyerState(foregroundPadIndex: 7, backgroundPadIndex: 8)
+            KeyerState(foregroundSource: .pad(6), backgroundSource: .pad(7)),
+            KeyerState(foregroundSource: .pad(7), backgroundSource: .pad(8))
         ]
     }
 

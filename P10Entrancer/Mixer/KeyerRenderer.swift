@@ -11,6 +11,12 @@ final class KeyerRenderer {
     private let pipeline: MTLRenderPipelineState
     private var lastSize: (Int, Int) = (0, 0)
 
+    /// Other renderers in the graph — populated AFTER all renderers
+    /// exist (since keyers can reference each other). The renderer
+    /// reads each reference's last-frame outputTexture, so cycles
+    /// resolve naturally with one frame of latency per hop.
+    var sourceResolver: ((SourceRef) -> MTLTexture?)?
+
     init(pads: PadSystem, keyer: KeyerState, context: MetalContext = .shared) throws {
         self.context = context
         self.pads = pads
@@ -23,17 +29,12 @@ final class KeyerRenderer {
     }
 
     func render() {
-        guard pads.pads.indices.contains(keyer.foregroundPadIndex),
-              pads.pads.indices.contains(keyer.backgroundPadIndex) else {
+        guard let resolver = sourceResolver else {
             outputTexture = nil
             return
         }
-        // Reads pads[FG/BG].texture (FX-processed) so per-pad FX feeds into
-        // the keyer's input and chaining via pads sourced from another keyer
-        // works naturally — that pad's texture comes from the other keyer's
-        // previous-frame outputTexture, giving free 1-frame feedback.
-        guard let fg = pads.pads[keyer.foregroundPadIndex].texture,
-              let bg = pads.pads[keyer.backgroundPadIndex].texture else {
+        guard let fg = resolver(keyer.foregroundSource),
+              let bg = resolver(keyer.backgroundSource) else {
             return
         }
 

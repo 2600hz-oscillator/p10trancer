@@ -153,11 +153,13 @@ final class MIDIBindings {
             mixer.masterVolume = v
             AudioEngine.shared.masterVolume = v
         case 3:
+            // Drives ONLY the master-mixer chroma-transition key.
+            // Keyer 1/2 have their own threshold/softness sliders in
+            // their setup sheets — those are independent of the
+            // crossfade transition.
             mixer.keyThreshold = v
-            keyer?.threshold = v
         case 4:
             mixer.keySoftness = max(0.001, v * 0.5)
-            keyer?.softness = max(0.001, v * 0.5)
         case 5...13:
             let padIndex = cc - 5
             pads.pads[padIndex].audioPlayer?.volume = v

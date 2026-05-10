@@ -20,6 +20,11 @@ final class FeedbackRenderer {
     private var useA = true
     private var lastSize: (Int, Int) = (0, 0)
 
+    /// Resolves the current input source (pad or keyer) to a texture.
+    /// Set after all renderers exist so the feedback unit can reference
+    /// keyer outputs as inputs.
+    var sourceResolver: ((SourceRef) -> MTLTexture?)?
+
     init(pads: PadSystem, state: FeedbackState, context: MetalContext = .shared) throws {
         self.context = context
         self.pads = pads
@@ -32,8 +37,8 @@ final class FeedbackRenderer {
     }
 
     func render() {
-        guard pads.pads.indices.contains(state.sourcePadIndex) else { return }
-        guard let src = pads.pads[state.sourcePadIndex].texture else { return }
+        guard let resolver = sourceResolver else { return }
+        guard let src = resolver(state.inputSource) else { return }
 
         let w = src.width
         let h = src.height

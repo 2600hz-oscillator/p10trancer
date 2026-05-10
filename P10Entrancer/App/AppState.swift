@@ -254,7 +254,7 @@ final class AppState {
             }
             .store(in: &cancellables)
         for keyer in keyerSystem.keyers {
-            keyer.$foregroundPadIndex
+            keyer.$foregroundSource
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in self?.applyAudioRouting() }
                 .store(in: &cancellables)

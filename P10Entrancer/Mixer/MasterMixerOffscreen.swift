@@ -28,6 +28,24 @@ final class MasterMixerOffscreen: FrameRenderer {
             fragment: "mixerFragment",
             pixelFormat: .bgra8Unorm
         )
+        // Wire the source resolvers AFTER all renderers exist so the
+        // graph can resolve cycles (keyer → keyer, feedback → keyer)
+        // by reading each unit's last-frame outputTexture.
+        let resolver: (SourceRef) -> MTLTexture? = { [weak self] ref in
+            guard let self else { return nil }
+            switch ref {
+            case .pad(let i):
+                guard self.pads.pads.indices.contains(i) else { return nil }
+                return self.pads.pads[i].texture
+            case .keyer(let i):
+                guard self.keyers.indices.contains(i) else { return nil }
+                return self.keyers[i].outputTexture
+            case .feedback:
+                return self.feedbacks.first?.outputTexture
+            }
+        }
+        for k in keyers { k.sourceResolver = resolver }
+        for f in feedbacks { f.sourceResolver = resolver }
     }
 
     var currentOutputTexture: MTLTexture? {

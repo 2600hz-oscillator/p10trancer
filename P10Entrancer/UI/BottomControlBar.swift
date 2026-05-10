@@ -121,9 +121,6 @@ struct BottomControlBar: View {
         HStack(spacing: 12) {
             hdmiBlock
             verticalDivider
-            keyerControlsButton
-            feedbackControlsButton
-            verticalDivider
             ntscBlock
             verticalDivider
             mixerButton
