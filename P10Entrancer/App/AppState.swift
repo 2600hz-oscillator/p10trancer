@@ -24,6 +24,12 @@ final class AppState {
     let liveRecordings: LiveRecordingsStore
     let cameras = CameraRegistry()
     let sessions = SessionStore()
+    /// Master clock + transport for LFOs (and any future tempo-synced
+    /// feature). Driven by internal pulse or external MIDI Clock.
+    let transport = Transport()
+    /// All per-pad LFOs (9 source pads + 2 keyers + 1 feedback).
+    /// Subscribes to `transport.tickPublisher` for evaluation.
+    let lfoEngine: LFOEngine
 
     /// Back-compat shim for code that still references a single keyer (MIDI
     /// bindings, audio routing). Points at Keyer 1.
@@ -37,6 +43,7 @@ final class AppState {
         let mixer = self.mixer
         let keyerSystem = self.keyerSystem
         let ntscState = self.ntscState
+        self.lfoEngine = LFOEngine(transport: self.transport)
 
         self.keyerRenderers = keyerSystem.keyers.map {
             try! KeyerRenderer(pads: pads, keyer: $0)
@@ -116,6 +123,14 @@ final class AppState {
             AudioEngine.shared.logSessionState(tag: "after mic tap")
         }
         midiBindings.attach(to: MIDIRouter.shared)
+        // Forward MIDI real-time bytes (0xF8 clock, 0xFA start, etc.)
+        // to the transport so it can derive BPM + isRunning from an
+        // external source. Chained off any existing handler.
+        let previousRealTime = MIDIRouter.shared.onRealTime
+        MIDIRouter.shared.onRealTime = { [weak self] byte in
+            previousRealTime?(byte)
+            self?.transport.handleRealTimeByte(byte)
+        }
         MIDIRouter.shared.startIfNeeded()
         MIDIOutput.shared.startIfNeeded()
         midiOutputBindings.attach(sink: MIDIOutput.shared)
@@ -140,6 +155,7 @@ final class AppState {
         screenshotCapturer.start()
         wireMasterVolume()
         wireAudioRouting()
+        registerLFOTargets()
         // Always start silent. Without this, a saved session with a
         // non-zero masterVolume would blast audio on launch — which is
         // exactly the regression the user hit when wireMasterVolume
@@ -235,6 +251,43 @@ final class AppState {
     /// mixer.masterVolume from any source (UI slider, MIDI CC, session
     /// load). Without this, session loads silently muted the engine
     /// because they bypass the slider's setter.
+    /// Register every modulatable param with the LFOEngine. Called at
+    /// startup and re-called when a pad's source changes (since the
+    /// new source's FXChain has a different parameter list).
+    private func registerLFOTargets() {
+        // Source pads: rebuild on every source change so FX param
+        // ids point at the current chain.
+        let initial = pads.onSourceChanged
+        let refreshPads: () -> Void = { [weak self] in
+            guard let self else { return }
+            initial?()
+            // Unregister all existing pad targets — cheap, just drops
+            // ids from a dictionary. Then re-register the current ones.
+            var stale: [String] = []
+            for i in 0..<PadSystem.padCount { stale.append("pad-\(i)-stale-marker") }
+            _ = stale
+            // Simplest: just re-register; LFOTarget ids are stable
+            // across re-registrations of the same param. Old entries
+            // for FX that are no longer present get overwritten or
+            // remain (and become inert because no assignment refers
+            // to them).
+            for i in 0..<PadSystem.padCount {
+                let targets = LFOTargets.forSourcePad(index: i, pad: self.pads.pads[i])
+                self.lfoEngine.registerTargets(targets)
+            }
+        }
+        pads.onSourceChanged = refreshPads
+        refreshPads()
+
+        // Keyers + feedback: static state objects, register once.
+        for (i, k) in keyerSystem.keyers.enumerated() {
+            lfoEngine.registerTargets(LFOTargets.forKeyer(index: i, state: k))
+        }
+        if let fb = feedbackSystem.unit(at: 0) {
+            lfoEngine.registerTargets(LFOTargets.forFeedback(state: fb))
+        }
+    }
+
     private func wireMasterVolume() {
         mixer.$masterVolume
             .receive(on: DispatchQueue.main)

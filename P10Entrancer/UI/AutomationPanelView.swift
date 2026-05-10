@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AutomationPanelView: View {
     @ObservedObject var engine: AutomationEngine
+    @ObservedObject var transport: Transport
     @Environment(\.dismiss) private var dismiss
     @State private var renameDraft: String = ""
     @State private var renaming: Bool = false
@@ -10,12 +11,94 @@ struct AutomationPanelView: View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+            transportRow
+            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
             controls
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
             takesList
         }
         .background(.black)
         .preferredColorScheme(.dark)
+    }
+
+    private var transportRow: some View {
+        HStack(spacing: 12) {
+            // Start/stop — drives the internal clock and any
+            // tempo-synced LFOs. Plays back received external clock
+            // when source = external.
+            Button {
+                transport.toggleRunning()
+            } label: {
+                Image(systemName: transport.isRunning ? "stop.fill" : "play.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.black)
+                    .frame(width: 56, height: 32)
+                    .background(transport.isRunning ? Color.red : Color.green)
+            }
+            .buttonStyle(.plain)
+
+            // BPM readout — editable when internal, display-only when
+            // external (external clock dictates BPM).
+            VStack(alignment: .leading, spacing: 2) {
+                Text("BPM").font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.5))
+                Text(String(format: "%.1f", transport.bpm))
+                    .font(.system(size: 18, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 80, alignment: .leading)
+
+            // Tap tempo — only meaningful for internal clock.
+            Button {
+                transport.tapTempo()
+            } label: {
+                Text("TAP")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .frame(width: 56, height: 32)
+                    .background(Color.white.opacity(0.08))
+                    .overlay(Rectangle().strokeBorder(Color.white.opacity(0.3), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(transport.clockSource == .externalClock)
+            .opacity(transport.clockSource == .externalClock ? 0.3 : 1)
+
+            Spacer()
+
+            // INT / EXT switch.
+            HStack(spacing: 0) {
+                clockButton("INT", source: .internalClock)
+                clockButton("EXT", source: .externalClock)
+            }
+
+            // External clock presence indicator.
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(transport.clockSource == .externalClock
+                          ? (transport.hasExternalClock ? Color.green : Color.red)
+                          : Color.white.opacity(0.2))
+                    .frame(width: 8, height: 8)
+                Text(transport.clockSource == .externalClock
+                     ? (transport.hasExternalClock ? "EXT LIVE" : "NO EXT")
+                     : "—")
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+
+    private func clockButton(_ label: String, source: Transport.ClockSource) -> some View {
+        let active = transport.clockSource == source
+        return Button { transport.clockSource = source } label: {
+            Text(label)
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(active ? .black : .white)
+                .frame(width: 50, height: 32)
+                .background(active ? Color.white : Color.white.opacity(0.06))
+                .overlay(Rectangle().strokeBorder(Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {

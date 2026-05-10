@@ -65,6 +65,7 @@ struct KeyerSettingsSheet: View {
     @ObservedObject var keyer: KeyerState
     let keyerIndex: Int
     @Environment(\.dismiss) private var dismiss
+    @State private var showLFO = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -73,6 +74,12 @@ struct KeyerSettingsSheet: View {
                     .font(.system(size: 14, weight: .heavy, design: .monospaced))
                     .foregroundStyle(.white).tracking(2.0)
                 Spacer()
+                Button { showLFO = true } label: {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.trailing, 16)
                 Button("CLOSE") { dismiss() }
                     .font(.system(size: 11, weight: .heavy, design: .monospaced))
                     .foregroundStyle(.white)
@@ -106,6 +113,14 @@ struct KeyerSettingsSheet: View {
         }
         .background(.black)
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showLFO) {
+            LFOSettingsSheet(
+                title: "KEYER \(keyerIndex + 1)",
+                lfo: AppState.shared.lfoEngine.lfo(for: LFOTargets.slotID(forKeyerIndex: keyerIndex)),
+                engine: AppState.shared.lfoEngine,
+                transport: AppState.shared.transport
+            )
+        }
     }
 
     private func slider(_ label: String, _ binding: Binding<Float>, in range: ClosedRange<Float>) -> some View {
@@ -125,6 +140,7 @@ struct KeyerSettingsSheet: View {
 struct FeedbackSettingsSheet: View {
     @ObservedObject var state: FeedbackState
     @Environment(\.dismiss) private var dismiss
+    @State private var showLFO = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -133,6 +149,12 @@ struct FeedbackSettingsSheet: View {
                     .font(.system(size: 14, weight: .heavy, design: .monospaced))
                     .foregroundStyle(.white).tracking(2.0)
                 Spacer()
+                Button { showLFO = true } label: {
+                    Image(systemName: "waveform.path.ecg")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.trailing, 16)
                 Button("CLOSE") { dismiss() }
                     .font(.system(size: 11, weight: .heavy, design: .monospaced))
                     .foregroundStyle(.white)
@@ -162,6 +184,14 @@ struct FeedbackSettingsSheet: View {
         }
         .background(.black)
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showLFO) {
+            LFOSettingsSheet(
+                title: "FEEDBACK",
+                lfo: AppState.shared.lfoEngine.lfo(for: LFOTargets.feedbackSlotID),
+                engine: AppState.shared.lfoEngine,
+                transport: AppState.shared.transport
+            )
+        }
     }
 
     private func slider(_ label: String, _ binding: Binding<Float>, in range: ClosedRange<Float>) -> some View {

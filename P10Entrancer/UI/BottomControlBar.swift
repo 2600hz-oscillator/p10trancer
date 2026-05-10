@@ -39,7 +39,7 @@ struct BottomControlBar: View {
             MixerPanelView(pads: pads, mixer: mixer)
         }
         .sheet(isPresented: $showAutomation) {
-            AutomationPanelView(engine: automation)
+            AutomationPanelView(engine: automation, transport: AppState.shared.transport)
         }
         .sheet(isPresented: $showKeyerControls) {
             KeyerControlsView(system: keyerSystem, mixer: mixer)

@@ -8,8 +8,36 @@ struct PadFooterControls: View {
     let pad: PadSlot
     let padIndex: Int
 
+    @State private var lfoSheet = false
+
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
+            // Top-right gear (waveform) — opens the per-pad LFO sheet.
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { lfoSheet = true } label: {
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(5)
+                            .background(.black.opacity(0.55))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
+                    .padding(.trailing, 6)
+                }
+                Spacer()
+            }
+            .sheet(isPresented: $lfoSheet) {
+                LFOSettingsSheet(
+                    title: "PAD \(padIndex + 1)",
+                    lfo: AppState.shared.lfoEngine.lfo(for: LFOTargets.slotID(forPadIndex: padIndex)),
+                    engine: AppState.shared.lfoEngine,
+                    transport: AppState.shared.transport
+                )
+            }
             // VU meter on camera pads — confirms the mic is picking up
             // signal so the user knows whether their voice is being
             // captured into recordings.
