@@ -7,6 +7,11 @@ struct PadGridView: View {
     @ObservedObject var cameras: CameraRegistry
     @State private var importerVisible: Bool = false
     @State private var pendingPadIndex: Int = -1
+    /// When non-nil, the pad index whose instrument settings sheet
+    /// should be presented. Set by the upper-left gear on instrument
+    /// pads. Kept here rather than per-cell so the sheet can survive
+    /// pad-source changes without disappearing mid-edit.
+    @State private var instrumentSheetPadIndex: Int? = nil
 
     var body: some View {
         ZStack {
@@ -40,6 +45,17 @@ struct PadGridView: View {
                 P10Logger.log("[PadGridView] file import failed: \(error)")
             }
             pendingPadIndex = -1
+        }
+        // Presented when the upper-left gear on an instrument pad is
+        // tapped. Sheet binding identifies the active pad index so
+        // sheet state survives a re-render.
+        .sheet(item: Binding(
+            get: { instrumentSheetPadIndex.map { InstrumentSheetTarget(id: $0) } },
+            set: { instrumentSheetPadIndex = $0?.id }
+        )) { target in
+            if let inst = pads.pads[target.id].source as? InstrumentSource {
+                InstrumentSettingsSheet(instrument: inst)
+            }
         }
     }
 
@@ -82,6 +98,30 @@ struct PadGridView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     if let video = pads.pads[index].source as? VideoFileSource {
                         VideoPadOverlays(video: video)
+                    }
+                    // Upper-left gear: instrument settings (steps,
+                    // keyboard, ADSR). Only appears when the pad
+                    // has been assigned an InstrumentSource.
+                    if pads.pads[index].source is InstrumentSource {
+                        VStack {
+                            HStack {
+                                Button {
+                                    instrumentSheetPadIndex = index
+                                } label: {
+                                    Image(systemName: "gearshape.fill")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .padding(6)
+                                        .background(.black.opacity(0.6))
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.top, 6)
+                                .padding(.leading, 6)
+                                Spacer()
+                            }
+                            Spacer()
+                        }
                     }
                     PadFooterControls(pad: pads.pads[index], padIndex: index)
                 }
@@ -137,6 +177,11 @@ struct PadGridView: View {
                     Label("Master Feedback", systemImage: "arrow.triangle.2.circlepath")
                 }
                 Button {
+                    AppState.shared.setInstrumentSource(at: index)
+                } label: {
+                    Label("Instrument: Wavetable", systemImage: "pianokeys")
+                }
+                Button {
                     AppState.shared.reloadVideoSource(at: index)
                 } label: {
                     Label("Reset to Bundled", systemImage: "arrow.counterclockwise")
@@ -156,6 +201,13 @@ struct PadGridView: View {
         case .builtinBack: return "camera"
         case .external: return "camera.viewfinder"
         }
+    }
+
+    /// Identifiable wrapper around a pad index so SwiftUI's
+    /// `.sheet(item:)` can drive the instrument sheet from an
+    /// optional Int.
+    private struct InstrumentSheetTarget: Identifiable, Hashable {
+        let id: Int
     }
 
     private func chip(_ text: String, color: Color) -> some View {
