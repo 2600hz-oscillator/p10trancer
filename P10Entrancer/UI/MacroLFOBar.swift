@@ -227,29 +227,45 @@ private struct VUMeterDraw: View {
     let level: CGFloat
     let peak: CGFloat
 
+    /// How many discrete segments stack from bottom to top. 16 is a
+    /// classic LED-meter density that reads clearly on a tall side
+    /// strip; the top three segments are red, the rest green —
+    /// matches the LED bargraph style.
+    private static let segmentCount = 16
+    private static let redSegments = 3
+
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            ZStack(alignment: .bottom) {
-                Rectangle()
-                    .fill(.black.opacity(0.5))
-                    .overlay(Rectangle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
-                // Filled bar
-                LinearGradient(
-                    colors: [.green, .green, .yellow, .red],
-                    startPoint: .bottom,
-                    endPoint: .top
-                )
-                .frame(width: w - 2, height: max(0, h * level - 2))
-                .offset(y: -1)
-                // Peak marker
-                if peak > 0.02 {
-                    Rectangle()
-                        .fill(.white.opacity(0.9))
-                        .frame(width: w - 2, height: 2)
-                        .offset(y: -(h * peak) + 1)
-                }
+        Canvas { ctx, size in
+            let w = size.width
+            let h = size.height
+            // Background frame.
+            let outline = CGRect(x: 0.5, y: 0.5, width: w - 1, height: h - 1)
+            ctx.fill(Path(outline), with: .color(.black.opacity(0.7)))
+            ctx.stroke(Path(outline), with: .color(.white.opacity(0.25)), lineWidth: 1)
+            guard h > 4, w > 4 else { return }
+            let segGap: CGFloat = 1
+            let innerPad: CGFloat = 2
+            let usableH = h - innerPad * 2
+            let segH = max(1, (usableH - segGap * CGFloat(Self.segmentCount - 1)) / CGFloat(Self.segmentCount))
+            let usableW = w - innerPad * 2
+            // Segment 0 = bottom, segmentCount-1 = top. Draw bottom-up
+            // so segH stacking visually grows upward from the floor.
+            for i in 0..<Self.segmentCount {
+                let threshold = CGFloat(i + 1) / CGFloat(Self.segmentCount)
+                let peakBand = peak >= threshold && peak - threshold < 1.0 / CGFloat(Self.segmentCount)
+                let lit = level >= threshold || peakBand
+                let isRed = i >= Self.segmentCount - Self.redSegments
+                let baseColor = isRed
+                    ? Color(red: 1.0, green: 0.18, blue: 0.18)
+                    : Color(red: 0.20, green: 0.95, blue: 0.20)
+                let color = lit ? baseColor : baseColor.opacity(0.22)
+                // y is measured from the top; segment i sits with its
+                // bottom edge at (h - innerPad - i*(segH+gap)) and its
+                // top edge segH above.
+                let bottomY = h - innerPad - CGFloat(i) * (segH + segGap)
+                let topY = bottomY - segH
+                let rect = CGRect(x: innerPad, y: topY, width: usableW, height: segH)
+                ctx.fill(Path(rect), with: .color(color))
             }
         }
     }

@@ -15,13 +15,16 @@ final class XYZState: ObservableObject {
     @Published var xShape: Float = 0
     @Published var yShape: Float = 0
 
-    /// Luma-driven displacement strength. ±1 swings the sample coord
-    /// by ±0.5 of the texture extent at full luma.
-    @Published var xDisp: Float = 0.2
-    @Published var yDisp: Float = 0
+    /// Luma-driven vertex displacement strength. ±1 swings each
+    /// sampled scanline vertex by ±0.5 of the screen extent at full
+    /// luma. Default yDisp = -0.3 makes bright pixels push UP, giving
+    /// the classic "raised terrain" Rutt-Etra look out of the box.
+    @Published var xDisp: Float = 0
+    @Published var yDisp: Float = -0.3
 
-    /// Output gain + tint.
-    @Published var intensity: Float = 1.0
+    /// Output gain + tint. Default intensity 1.5 keeps the lines
+    /// from looking too dim with additive blending.
+    @Published var intensity: Float = 1.5
     @Published var tintR: Float = 1.0
     @Published var tintG: Float = 1.0
     @Published var tintB: Float = 1.0

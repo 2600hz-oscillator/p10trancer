@@ -1,47 +1,39 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// Rutt-Etra-flavored 2D coordinate remap fused with the SHAPEDRAMPS
-// continuous-morph coord field. Three shaped-ramp modes per axis
-// (linear / triangle / soft-fold / radial) crossfaded by the
-// xShape / yShape morph parameter. Luma of the source displaces
-// the final sample coordinate, producing the Rutt-Etra effect on
-// any video pad routed in.
+// XYZ raster scope: forward-scatter (not coord-remap). The vertex
+// shader walks a grid of source-pixel sample points, reads luma at
+// each one, and emits an output vertex whose POSITION is the
+// shaped H/V ramp plus a luma-scaled displacement. The fragment
+// shader draws lines between adjacent column-vertices in each row
+// — classic Rutt-Etra: bright pixels push their scanline outward,
+// dark pixels leave it flat, producing the "3D heightmap" look
+// natively rather than warping the underlying raster.
 
 struct XYZParams {
     float xShape;     // 0=linear, 0.333=triangle, 0.666=soft-fold, 1=radial
     float yShape;
-    float xDisp;      // luma-driven displacement strength, X
-    float yDisp;
-    float intensity;  // output multiplier
+    float xDisp;      // luma * xDisp added to ramp-X (lateral wiggle)
+    float yDisp;      // luma * yDisp added to ramp-Y (heightmap)
+    float intensity;  // brightness multiplier on emitted color
     float tintR;
     float tintG;
     float tintB;
-    float xFreq;      // ramp frequency (1.0 = single sweep across screen)
+    float xFreq;      // shaped-ramp frequency (1=one sweep, 2=two, etc.)
     float yFreq;
     float xPhase;
     float yPhase;
+    uint  cols;       // horizontal scan-sample count
+    uint  rows;       // vertical scan-sample count
 };
 
 struct XYZVertOut {
     float4 position [[position]];
-    float2 uv;
+    half3 color;
 };
 
-vertex XYZVertOut xyzVertex(uint vid [[vertex_id]]) {
-    float2 positions[3] = { float2(-1.0, -3.0), float2(-1.0, 1.0), float2(3.0, 1.0) };
-    XYZVertOut out;
-    out.position = float4(positions[vid], 0.0, 1.0);
-    out.uv = (positions[vid] + float2(1.0, 1.0)) * 0.5;
-    out.uv.y = 1.0 - out.uv.y;
-    return out;
-}
-
-// Generates the X or Y coord field at uv, morphed continuously
-// between linear / triangle / soft-fold / radial as `morph` sweeps
-// 0..1.
 float shapedRamp(float t, float2 uv, float morph) {
-    float lin = clamp(t, 0.0, 1.0);
+    float lin = fract(t);
     float tri = abs(2.0 * lin - 1.0);
     float sf = 0.5 - 0.5 * cos(2.0 * M_PI_F * lin);
     float radial = clamp(length(uv - 0.5) * 1.41421356, 0.0, 1.0);
@@ -55,22 +47,44 @@ float shapedRamp(float t, float2 uv, float morph) {
     }
 }
 
-float luma(float3 rgb) {
-    return dot(rgb, float3(0.299, 0.587, 0.114));
-}
-
-fragment half4 xyzFragment(
-    XYZVertOut in [[stage_in]],
-    texture2d<float> zTex [[texture(0)]],
+vertex XYZVertOut xyzVertex(
+    uint vid [[vertex_id]],
+    texture2d<float> srcTex [[texture(0)]],
     constant XYZParams &params [[buffer(0)]]
 ) {
+    uint col = vid % params.cols;
+    uint row = vid / params.cols;
+    float h0 = float(col) / float(params.cols - 1);
+    float v0 = float(row) / float(params.rows - 1);
+
+    // Sample the source at the raw (h0, v0) — luma drives the
+    // displacement, color comes out as-is.
     constexpr sampler s(filter::linear, address::clamp_to_edge);
-    float rampX = shapedRamp(in.uv.x * params.xFreq + params.xPhase, in.uv, params.xShape);
-    float rampY = shapedRamp(in.uv.y * params.yFreq + params.yPhase, in.uv, params.yShape);
-    float l = luma(zTex.sample(s, in.uv).rgb);
-    float finalU = rampX + (l - 0.5) * params.xDisp;
-    float finalV = rampY + (l - 0.5) * params.yDisp;
-    float3 sampled = zTex.sample(s, clamp(float2(finalU, finalV), 0.0, 1.0)).rgb;
-    float3 tinted = sampled * float3(params.tintR, params.tintG, params.tintB) * params.intensity;
-    return half4(half3(tinted), 1.0);
+    float4 src = srcTex.sample(s, float2(h0, v0));
+    float lum = dot(src.rgb, float3(0.299, 0.587, 0.114));
+
+    // Apply shaped ramps to get the base H/V position. Default
+    // morph 0 = linear, so the unshaped raster reproduces the
+    // source 1:1 before luma displacement.
+    float h = shapedRamp(h0 * params.xFreq + params.xPhase, float2(h0, v0), params.xShape);
+    float v = shapedRamp(v0 * params.yFreq + params.yPhase, float2(h0, v0), params.yShape);
+
+    // Bipolar displacement (luma - 0.5 so mid-grey doesn't move).
+    float x = h + (lum - 0.5) * params.xDisp;
+    float y = v + (lum - 0.5) * params.yDisp;
+
+    // [0,1] → NDC. Metal's NDC is y-up; our UVs are y-down, so flip.
+    float ndcX = x * 2.0 - 1.0;
+    float ndcY = 1.0 - y * 2.0;
+
+    XYZVertOut out;
+    out.position = float4(ndcX, ndcY, 0.0, 1.0);
+    half3 color = half3(src.rgb * params.intensity *
+                        float3(params.tintR, params.tintG, params.tintB));
+    out.color = color;
+    return out;
+}
+
+fragment half4 xyzFragment(XYZVertOut in [[stage_in]]) {
+    return half4(in.color, 1.0h);
 }

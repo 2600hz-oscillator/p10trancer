@@ -303,6 +303,27 @@ final class AppState {
         // Global / macro-only: mixer position. Only macros see this
         // (LFOEngine.availableTargets(forSlot:) filters per slot).
         lfoEngine.registerTargets(LFOTargets.forMixer(mixer))
+
+        // FX slot LFO plumbing: the engine's slot resolver maps each
+        // fxslot-N to the underlying FX unit's slot ID so the slot's
+        // LFO sees the right param surface even after the user
+        // changes the slot's FX type.
+        lfoEngine.fxSlotResolver = { [weak self] index in
+            guard let self,
+                  self.fxPadSystem.slots.indices.contains(index) else { return nil }
+            return self.fxPadSystem.slots[index].kind.underlyingLFOSlotID
+        }
+        // On FX-type change inside a slot, wipe the slot LFO's
+        // assignment targets — the new type has different params, so
+        // any saved target IDs no longer apply. Wave shape / rate /
+        // amount sliders persist.
+        for slot in fxPadSystem.slots {
+            slot.onKindChange = { [weak self] slot, _, _ in
+                guard let self else { return }
+                let lfo = self.lfoEngine.lfo(for: slot.lfoSlotID)
+                lfo.assignments = (0..<3).map { _ in LFOAssignment() }
+            }
+        }
     }
 
     private func wireMasterVolume() {

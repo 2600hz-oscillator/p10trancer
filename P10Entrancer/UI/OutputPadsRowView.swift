@@ -48,6 +48,7 @@ private struct OutputPadCell: View {
     let renderers: OutputPadRenderers
 
     @State private var settingsPresented = false
+    @State private var lfoPresented = false
 
     var body: some View {
         let kind = slot.kind
@@ -95,6 +96,7 @@ private struct OutputPadCell: View {
                 HStack {
                     Menu {
                         Button("Open setup…") { settingsPresented = true }
+                        Button("Open LFO…") { lfoPresented = true }
                         Divider()
                         Section("Change to") {
                             ForEach(typePickerOptions, id: \.self) { option in
@@ -123,6 +125,14 @@ private struct OutputPadCell: View {
         }
         .sheet(isPresented: $settingsPresented) {
             outputPadSettings(for: kind)
+        }
+        .sheet(isPresented: $lfoPresented) {
+            LFOSettingsSheet(
+                title: "\(kind.displayLabel) (slot \(slot.id + 1))",
+                lfo: AppState.shared.lfoEngine.lfo(for: slot.lfoSlotID),
+                availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: slot.lfoSlotID),
+                transport: AppState.shared.transport
+            )
         }
     }
 

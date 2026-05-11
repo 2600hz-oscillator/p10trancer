@@ -122,6 +122,11 @@ final class LFOEngine: ObservableObject {
     /// Targets currently being driven by ≥1 LFO assignment, with the
     /// base value snapshot so we can restore on release.
     private var liveTargets: [String: Float] = [:]
+    /// Resolver for `fxslot-N` slot IDs → the underlying FX-unit
+    /// slot ID (`keyer-N` / `feedback` / `xyz-N`). Set once by
+    /// AppState; lets the slot LFO follow whichever FX type is
+    /// currently in that slot.
+    var fxSlotResolver: ((Int) -> String?)?
 
     init(transport: Transport) {
         self.transport = transport
@@ -165,6 +170,14 @@ final class LFOEngine: ObservableObject {
     func availableTargets(forSlot slotID: String) -> [LFOTarget] {
         if slotID.hasPrefix("macro-") {
             return Array(targetsByID.values).sorted { $0.displayName < $1.displayName }
+        }
+        // FX-slot LFOs delegate to whatever FX unit is currently
+        // assigned to that slot. The fxSlotResolver hands back a
+        // keyer-N / feedback / xyz-N slot ID; we recurse to resolve.
+        if slotID.hasPrefix("fxslot-"),
+           let i = Int(slotID.dropFirst("fxslot-".count)) {
+            guard let underlying = fxSlotResolver?(i) else { return [] }
+            return availableTargets(forSlot: underlying)
         }
         let prefix: String
         if slotID == "feedback" {
