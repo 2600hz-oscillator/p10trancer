@@ -12,6 +12,7 @@ struct PadGridView: View {
     /// pads. Kept here rather than per-cell so the sheet can survive
     /// pad-source changes without disappearing mid-edit.
     @State private var instrumentSheetPadIndex: Int? = nil
+    @State private var eightohSheetPadIndex: Int? = nil
 
     var body: some View {
         ZStack {
@@ -57,6 +58,14 @@ struct PadGridView: View {
                 InstrumentSettingsSheet(instrument: inst)
             }
         }
+        .sheet(item: Binding(
+            get: { eightohSheetPadIndex.map { InstrumentSheetTarget(id: $0) } },
+            set: { eightohSheetPadIndex = $0?.id }
+        )) { target in
+            if let drums = pads.pads[target.id].source as? EIGHTOHSource {
+                EIGHTOHSettingsSheet(source: drums)
+            }
+        }
     }
 
     private func cellOverlay(index: Int) -> some View {
@@ -99,14 +108,19 @@ struct PadGridView: View {
                     if let video = pads.pads[index].source as? VideoFileSource {
                         VideoPadOverlays(video: video)
                     }
-                    // Upper-left gear: instrument settings (steps,
-                    // keyboard, ADSR). Only appears when the pad
-                    // has been assigned an InstrumentSource.
-                    if pads.pads[index].source is InstrumentSource {
+                    // Upper-left gear: instrument settings — wavetable
+                    // (WAVECEL) or drum sequencer (EIGHTOH). Only
+                    // appears for instrument-kind sources.
+                    if pads.pads[index].source is InstrumentSource
+                       || pads.pads[index].source is EIGHTOHSource {
                         VStack {
                             HStack {
                                 Button {
-                                    instrumentSheetPadIndex = index
+                                    if pads.pads[index].source is EIGHTOHSource {
+                                        eightohSheetPadIndex = index
+                                    } else {
+                                        instrumentSheetPadIndex = index
+                                    }
                                 } label: {
                                     Image(systemName: "gearshape.fill")
                                         .font(.system(size: 14, weight: .bold))
@@ -180,6 +194,11 @@ struct PadGridView: View {
                     AppState.shared.setInstrumentSource(at: index)
                 } label: {
                     Label("Instrument: Wavetable", systemImage: "pianokeys")
+                }
+                Button {
+                    AppState.shared.setEIGHTOHSource(at: index)
+                } label: {
+                    Label("Instrument: EIGHTOH", systemImage: "metronome")
                 }
                 Button {
                     AppState.shared.reloadVideoSource(at: index)

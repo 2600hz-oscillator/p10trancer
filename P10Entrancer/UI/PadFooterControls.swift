@@ -34,11 +34,9 @@ struct PadFooterControls: View {
                 Spacer()
             }
             .sheet(isPresented: $lfoSheet) {
-                if pad.source is InstrumentSource {
-                    // Instrument pads ship with three LFOs (the
-                    // sheet handles tabs across them). Plenty of
-                    // params to sweep — synth, ADSR, filter, reverb,
-                    // visualizer.
+                if pad.source is InstrumentSource || pad.source is EIGHTOHSource {
+                    // Instrument-kind pads ship with three LFOs (the
+                    // sheet handles tabs across them).
                     MultiLFOSheet(padIndex: padIndex,
                                   lfoCount: 3,
                                   engine: AppState.shared.lfoEngine,
@@ -97,6 +95,8 @@ struct PadFooterControls: View {
             VideoPlayStopIcon(video: video, padIndex: padIndex)
         } else if let inst = pad.source as? InstrumentSource {
             InstrumentPlayStopIcon(instrument: inst, padIndex: padIndex)
+        } else if let drums = pad.source as? EIGHTOHSource {
+            EIGHTOHPlayStopIcon(source: drums, padIndex: padIndex)
         } else {
             Image(systemName: "play.fill")
                 .font(.system(size: 14, weight: .bold))
@@ -134,6 +134,28 @@ private struct VideoPlayStopIcon: View {
         Button {
             video.isPlaying.toggle()
             P10Logger.log("[PadFooter] pad \(padIndex + 1) play=\(video.isPlaying)")
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(6)
+                .background(.black.opacity(0.55))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Play/stop the EIGHTOH drum sequencer loop.
+private struct EIGHTOHPlayStopIcon: View {
+    @ObservedObject var source: EIGHTOHSource
+    let padIndex: Int
+
+    var body: some View {
+        let icon = source.isPlaying ? "pause.fill" : "play.fill"
+        Button {
+            source.isPlaying.toggle()
+            P10Logger.log("[PadFooter] pad \(padIndex + 1) EIGHTOH play=\(source.isPlaying)")
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .bold))

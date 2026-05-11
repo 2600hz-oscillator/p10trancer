@@ -366,7 +366,7 @@ final class InstrumentSource: PadSource, ObservableObject {
 /// WAVECEL output is stereo. PadAudioPlayer attaches this as a stereo
 /// source; the L/R buffers come straight from the synth, the envelope
 /// applies to both equally.
-final class WaveCelSynthRenderer: @unchecked Sendable {
+final class WaveCelSynthRenderer: PadStereoRenderer, @unchecked Sendable {
     private let synth: WaveCelSynth
     private let adsr: ADSREnvelope
     private let filter: WaspFilter

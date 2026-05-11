@@ -444,6 +444,15 @@ final class AppState {
         P10Logger.log("[AppState] pad \(index + 1) source → Instrument (wavetable)")
     }
 
+    /// Replace a pad's source with a fresh EIGHTOH drum machine.
+    /// Each pad gets its own 4-track sequencer + voices so patterns
+    /// don't share state across pads.
+    func setEIGHTOHSource(at index: Int) {
+        let drums = EIGHTOHSource(transport: transport)
+        pads.setSource(drums, at: index)
+        P10Logger.log("[AppState] pad \(index + 1) source → Instrument (EIGHTOH)")
+    }
+
     /// Set pad `targetIndex`'s source to forward another pad's
     /// processed texture. Refuses self-references (pad N can't chain
     /// from pad N — that's an infinite read on the same property).

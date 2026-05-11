@@ -2,6 +2,17 @@ import Foundation
 import AVFoundation
 import Combine
 
+/// Common surface for any stereo source we want to plug into a per-pad
+/// audio strip (PadAudioPlayer.Source.synth / .drumMachine). Render
+/// implementations run on the audio thread; conform `@unchecked
+/// Sendable` for the closure capture.
+protocol PadStereoRenderer: AnyObject {
+    func renderStereoBlock(left: UnsafeMutablePointer<Float>,
+                            right: UnsafeMutablePointer<Float>,
+                            count: Int,
+                            sampleRate: Double)
+}
+
 /// Per-pad audio output strip. Two source kinds: a video file's looping audio
 /// (for VideoFileSource) and the iPad mic (for camera sources). The
 /// downstream is the same: a private AVAudioMixerNode whose outputVolume
@@ -16,6 +27,8 @@ final class PadAudioPlayer: ObservableObject {
         /// stereo sample buffers. Used by InstrumentSource for the
         /// WAVECEL wavetable synth + ADSR path.
         case synth(WaveCelSynthRenderer)
+        /// EIGHTOH drum-machine stereo renderer.
+        case drumMachine(EIGHTOHRenderer)
     }
 
     private let engine: AVAudioEngine
@@ -73,9 +86,10 @@ final class PadAudioPlayer: ObservableObject {
         self.source = source
         self.label = label
         switch source {
-        case .file:  self.volume = 0.7
-        case .mic:   self.volume = 0
-        case .synth: self.volume = 0.7
+        case .file:        self.volume = 0.7
+        case .mic:         self.volume = 0
+        case .synth:       self.volume = 0.7
+        case .drumMachine: self.volume = 0.7
         }
         switch source {
         case .file(let url):
@@ -83,8 +97,9 @@ final class PadAudioPlayer: ObservableObject {
         case .mic:
             Task { await self.loadMic() }
         case .synth(let renderer):
-            // Synth attachment is synchronous; no file I/O.
             loadSynth(renderer: renderer)
+        case .drumMachine(let renderer):
+            loadStereoRenderer(renderer)
         }
     }
 
@@ -248,18 +263,21 @@ final class PadAudioPlayer: ObservableObject {
     }
 
     /// Attach a stereo AVAudioSourceNode driven by the WAVECEL synth
-    /// renderer. The node produces stereo (L/R) samples that flow
-    /// through the per-pad mixerNode (volume / mute / VU tap) into
-    /// the engine's main mix.
+    /// renderer. Thin wrapper over loadStereoRenderer.
     private func loadSynth(renderer: WaveCelSynthRenderer) {
+        loadStereoRenderer(renderer)
+    }
+
+    /// Attach a stereo AVAudioSourceNode whose render block delegates
+    /// to any conforming PadStereoRenderer. Both the WAVECEL
+    /// wavetable synth and the EIGHTOH drum machine plug in here so
+    /// they share the per-pad mixerNode (volume / mute / VU tap).
+    private func loadStereoRenderer(_ renderer: PadStereoRenderer) {
         let outFmt = engine.outputNode.outputFormat(forBus: 0)
         let sr = outFmt.sampleRate > 0 ? outFmt.sampleRate : 48000
-        // Stereo non-interleaved is the most natural shape for
-        // AVAudioSourceNode + AVAudioEngine — channels live in two
-        // separate Float pointers in the AudioBufferList.
         guard let stereoFmt = AVAudioFormat(standardFormatWithSampleRate: sr,
                                             channels: 2) else {
-            P10Logger.log("[PadAudioPlayer:\(label)] synth stereo fmt failed")
+            P10Logger.log("[PadAudioPlayer:\(label)] stereo fmt failed")
             return
         }
         let node = AVAudioSourceNode(format: stereoFmt) { _, _, frameCount, audioBufferList -> OSStatus in
@@ -279,7 +297,6 @@ final class PadAudioPlayer: ObservableObject {
         engine.attach(mixerNode)
         engine.connect(node, to: mixerNode, format: stereoFmt)
         engine.connect(mixerNode, to: engine.mainMixerNode, format: nil)
-        // VU tap averages the two channels for the pad's RMS read.
         mixerNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
             guard let ch0 = buffer.floatChannelData?[0] else { return }
             var sum: Float = 0
@@ -290,7 +307,7 @@ final class PadAudioPlayer: ObservableObject {
         }
         applyEffectiveVolume()
         attachedSynth = true
-        P10Logger.log("[PadAudioPlayer:\(label)] synth attached, sr=\(sr) (stereo)")
+        P10Logger.log("[PadAudioPlayer:\(label)] stereo renderer attached, sr=\(sr)")
     }
 
     private func loadMic() async {

@@ -242,6 +242,38 @@ final class InstrumentTests: XCTestCase {
         }
     }
 
+    // MARK: - EIGHTOH
+
+    func test_kick_voice_emits_energy_after_trigger() {
+        let kick = KickVoice()
+        kick.trigger()
+        var l = [Float](repeating: 0, count: 512)
+        var r = [Float](repeating: 0, count: 512)
+        l.withUnsafeMutableBufferPointer { lp in
+            r.withUnsafeMutableBufferPointer { rp in
+                kick.renderAdd(left: lp.baseAddress!, right: rp.baseAddress!,
+                               count: 512, sampleRate: 48000)
+            }
+        }
+        let pp = (l.max() ?? 0) - (l.min() ?? 0)
+        XCTAssertGreaterThan(pp, 0.5, "kick must produce audible swing post-trigger")
+    }
+
+    func test_drum_sequencer_fires_trigger_at_step_boundaries() {
+        let seq = DrumSequencer()
+        seq.tracks[0].steps[0] = true
+        seq.tracks[2].steps[0] = true
+        seq.tracks[1].steps[1] = true
+        var fires: [[Int]] = []
+        seq.onStepTrigger = { fires.append($0) }
+        // 12 ticks = first 2 steps.
+        for _ in 0..<12 { seq.handleTick() }
+        XCTAssertEqual(fires.count, 2)
+        XCTAssertEqual(Set(fires[0]), Set([0, 2]),
+                       "step 0 should fire tracks 0 and 2 simultaneously")
+        XCTAssertEqual(fires[1], [1])
+    }
+
     // MARK: - Frequency conversion
 
     func test_midi_note_60_is_middle_c() {
