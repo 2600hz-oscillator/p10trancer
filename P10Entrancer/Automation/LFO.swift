@@ -229,6 +229,19 @@ final class LFOEngine: ObservableObject {
         // Advance each enabled LFO's phase by its per-tick increment,
         // sample its waveform, and accumulate the contribution from
         // every assignment into the target's effective value.
+        //
+        // Contribution uses a blend model rather than ±half-range
+        // additive: at amount=1 the param is fully driven across its
+        // full range by the LFO regardless of the base value (so a
+        // base near 0 still produces a full 0→1→0 sweep instead of
+        // clipping at the floor). amount=0 leaves the base alone;
+        // intermediate values smoothly blend between base and the
+        // LFO's full-range output.
+        //
+        //   unipolar  = (sample + 1) / 2                  ∈ [0,1]
+        //   lfoFull   = lerp(range.lower, range.upper, unipolar)
+        //   delta     = amount × (lfoFull - base)
+        //   effective = base + Σ delta  (clamped to range)
         let ticksPerQuarter: Double = 24
         var contribution: [String: Float] = [:] // sum of all LFO contribs per target
         for (_, state) in lfos where state.enabled {
@@ -236,13 +249,13 @@ final class LFOEngine: ObservableObject {
             state.phase = state.phase + cyclesPerTick
             if state.phase >= 1 { state.phase -= floor(state.phase) }
             let sample = lfoSample(phase: state.phase, morph: state.morph)
+            let unipolar = (sample + 1) * 0.5
             for assign in state.assignments where !assign.targetID.isEmpty {
-                guard let target = targetsByID[assign.targetID] else { continue }
-                // Half the range so amount=1 swings ±50% of total
-                // range from the base (full range would clip
-                // immediately at base values near the ends).
-                let span = (target.range.upperBound - target.range.lowerBound) * 0.5
-                let delta = sample * assign.amount * span
+                guard let target = targetsByID[assign.targetID],
+                      let base = liveTargets[assign.targetID] else { continue }
+                let span = target.range.upperBound - target.range.lowerBound
+                let lfoFull = target.range.lowerBound + unipolar * span
+                let delta = assign.amount * (lfoFull - base)
                 contribution[assign.targetID, default: 0] += delta
             }
         }

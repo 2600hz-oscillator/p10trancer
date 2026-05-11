@@ -138,7 +138,80 @@ final class LFOTests: XCTestCase {
                        "Switching clock source must stop transport so the new source can drive it")
     }
 
+    // MARK: - Full-sweep behavior
+
+    /// At AMT=100% the LFO must drive the target across its full
+    /// range — not just ±half. Reported via "macro position at full
+    /// amt only sweeps slider 0..50%" when the slider's base was at
+    /// the floor. Blend-model fix means AMT=1 takes over the param.
+    func test_amt_1_produces_full_sweep_regardless_of_base() {
+        let transport = Transport()
+        let engine = LFOEngine(transport: transport)
+        var slider: Float = 0
+        engine.registerTargets([LFOTarget(
+            id: "t", displayName: "T", range: 0...1,
+            getBase: { slider }, setEffective: { slider = $0 })])
+        let lfo = engine.lfo(for: "s")
+        lfo.enabled = true
+        lfo.morph = 0
+        lfo.rate = .quarter
+        lfo.assignments[0] = LFOAssignment(targetID: "t", amount: 1.0)
+        transport.start()
+        var maxVal: Float = 0
+        var minVal: Float = 1
+        // 24 ticks = one full cycle at .quarter rate. Sample the
+        // slider after each tick to capture both peaks.
+        for _ in 0..<24 {
+            transport.tickPublisher.send(0)
+            maxVal = max(maxVal, slider)
+            minVal = min(minVal, slider)
+        }
+        XCTAssertGreaterThan(maxVal, 0.99,
+            "AMT=1 with base=0 must still reach the upper bound")
+        XCTAssertLessThan(minVal, 0.01,
+            "AMT=1 with base=0 must still touch the lower bound")
+    }
+
+    func test_amt_half_with_base_at_floor_sweeps_lower_half() {
+        // At base=0, AMT=0.5 the LFO blends 50% toward full range,
+        // so the slider should sweep 0..0.5 across a cycle.
+        let transport = Transport()
+        let engine = LFOEngine(transport: transport)
+        var slider: Float = 0
+        engine.registerTargets([LFOTarget(
+            id: "t", displayName: "T", range: 0...1,
+            getBase: { slider }, setEffective: { slider = $0 })])
+        let lfo = engine.lfo(for: "s")
+        lfo.enabled = true
+        lfo.morph = 0
+        lfo.rate = .quarter
+        lfo.assignments[0] = LFOAssignment(targetID: "t", amount: 0.5)
+        transport.start()
+        var maxVal: Float = 0
+        for _ in 0..<24 { transport.tickPublisher.send(0); maxVal = max(maxVal, slider) }
+        XCTAssertEqual(maxVal, 0.5, accuracy: 0.02,
+            "AMT=0.5 with base=0 should peak at ~0.5")
+    }
+
     // MARK: - Scoping
+
+    func test_pad_lfo_includes_its_own_fx_params() {
+        let transport = Transport()
+        let engine = LFOEngine(transport: transport)
+        engine.registerTargets([
+            LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "pad.0.fx.Luma Phaser.Strength", displayName: "P1 Luma str", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "pad.0.fx.Edge Enhance.Strength", displayName: "P1 Edge str", range: 0...3, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "pad.1.fx.Blur.Radius", displayName: "P2 Blur", range: 0...6, getBase: { 0 }, setEffective: { _ in }),
+        ])
+        let ids = Set(engine.availableTargets(forSlot: "pad-0").map(\.id))
+        XCTAssertTrue(ids.contains("pad.0.volume"))
+        XCTAssertTrue(ids.contains("pad.0.fx.Luma Phaser.Strength"),
+                      "pad-0 LFO must include its own FX-chain params")
+        XCTAssertTrue(ids.contains("pad.0.fx.Edge Enhance.Strength"))
+        XCTAssertFalse(ids.contains("pad.1.fx.Blur.Radius"),
+                       "pad-0 LFO must NOT include another pad's FX params")
+    }
 
     func test_pad_lfo_only_sees_its_own_pad_targets() {
         let transport = Transport()
