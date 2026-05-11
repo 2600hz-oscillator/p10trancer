@@ -80,6 +80,9 @@ struct PadGridView: View {
                         .background(.black.opacity(0.5))
                         .padding([.bottom, .trailing], 6)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    if let video = pads.pads[index].source as? VideoFileSource {
+                        VideoPadOverlays(video: video)
+                    }
                     PadFooterControls(pad: pads.pads[index], padIndex: index)
                 }
             )
