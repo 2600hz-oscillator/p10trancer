@@ -69,9 +69,9 @@ final class FeedbackRenderer {
             panX: state.panX,
             panY: state.panY,
             tilt: tiltRadians,
-            decay: state.decay,
-            feedbackMix: state.feedbackMix,
-            luminosity: state.luminosity,
+            persistence: state.decay,
+            inputGain: state.feedbackMix,
+            bloom: state.luminosity,
             chromaBoost: state.chromaBoost
         )
 
@@ -117,8 +117,8 @@ private struct FeedbackParamsBuffer {
     var panX: Float
     var panY: Float
     var tilt: Float
-    var decay: Float
-    var feedbackMix: Float
-    var luminosity: Float
+    var persistence: Float
+    var inputGain: Float
+    var bloom: Float
     var chromaBoost: Float
 }

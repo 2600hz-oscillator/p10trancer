@@ -23,9 +23,23 @@ final class KeyerState: ObservableObject {
     @Published var foregroundSource: SourceRef
     @Published var backgroundSource: SourceRef
     @Published var kind: KeyerKind = .chroma
-    @Published var threshold: Float = 0.35
-    @Published var softness: Float = 0.1
+    /// Chroma: inner chrominance radius (key fully transparent < this).
+    /// Luma:   brightness threshold the alpha ramp centers on.
+    /// Was named `threshold` historically; kept for LFO-target +
+    /// session compatibility.
+    @Published var threshold: Float = 0.15
+    /// Width of the smooth ramp band. Wider = softer edges; too wide
+    /// produces a muddy matte.
+    @Published var softness: Float = 0.08
+    /// Chroma key color. Default green-screen.
     @Published var keyColor: SIMD3<Float> = .init(0, 1, 0)
+    /// Spill suppression strength (chroma key only). 0 = none, 1 =
+    /// fully pull edge pixels' chroma toward neutral so the key
+    /// color doesn't tint the subject.
+    @Published var spill: Float = 0.5
+    /// Flip the matte — useful for luma keys where the user wants to
+    /// keep the DARK side instead of the bright.
+    @Published var invert: Bool = false
 
     init(foregroundSource: SourceRef = .pad(7), backgroundSource: SourceRef = .pad(8)) {
         self.foregroundSource = foregroundSource

@@ -58,10 +58,10 @@ final class KeyerRenderer {
             keyR: keyer.keyColor.x,
             keyG: keyer.keyColor.y,
             keyB: keyer.keyColor.z,
-            threshold: keyer.threshold,
+            tolerance: keyer.threshold,
             softness: keyer.softness,
-            _pad0: 0,
-            _pad1: 0
+            spill: keyer.spill,
+            invert: keyer.invert ? 1 : 0
         )
 
         encoder.setRenderPipelineState(pipeline)
@@ -91,8 +91,8 @@ private struct KeyerParamsBuffer {
     var keyR: Float
     var keyG: Float
     var keyB: Float
-    var threshold: Float
+    var tolerance: Float
     var softness: Float
-    var _pad0: Float
-    var _pad1: Float
+    var spill: Float
+    var invert: Float
 }

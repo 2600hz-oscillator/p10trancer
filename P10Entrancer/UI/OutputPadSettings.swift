@@ -122,8 +122,21 @@ struct KeyerSettingsSheet: View {
                         ForEach(KeyerKind.allCases) { Text($0.displayName).tag($0) }
                     }
                     .pickerStyle(.segmented).colorScheme(.dark)
-                    slider("Threshold", $keyer.threshold, in: 0...1)
+                    if keyer.kind == .chroma {
+                        keyColorRow
+                    }
+                    slider(keyer.kind == .chroma ? "Tolerance" : "Threshold",
+                           $keyer.threshold, in: 0...1)
                     slider("Softness", $keyer.softness, in: 0.001...0.5)
+                    if keyer.kind == .chroma {
+                        slider("Spill", $keyer.spill, in: 0...1)
+                    }
+                    Toggle(isOn: $keyer.invert) {
+                        Text("INVERT")
+                            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
+                    .tint(.green)
                 }
                 .padding(20)
             }
@@ -151,6 +164,39 @@ struct KeyerSettingsSheet: View {
             }
             Slider(value: binding, in: range).tint(.white)
         }
+    }
+
+    /// SwiftUI's system ColorPicker uses the native iOS color wheel
+    /// (the same one used in Notes etc.) — full hue circle + sat/
+    /// brightness sliders + recently used. Binding-bridged into the
+    /// keyer's SIMD3<Float> RGB triplet.
+    private var keyColorRow: some View {
+        HStack {
+            Text("KEY COLOR")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.7))
+            Spacer()
+            ColorPicker("", selection: Binding<Color>(
+                get: { Color(red: Double(keyer.keyColor.x),
+                             green: Double(keyer.keyColor.y),
+                             blue: Double(keyer.keyColor.z)) },
+                set: { newColor in
+                    let comps = UIColor(newColor).cgColor.components ?? [0, 1, 0, 1]
+                    keyer.keyColor = SIMD3(
+                        Float(comps[safe: 0] ?? 0),
+                        Float(comps[safe: 1] ?? 0),
+                        Float(comps[safe: 2] ?? 0)
+                    )
+                }
+            ), supportsOpacity: false)
+                .labelsHidden()
+        }
+    }
+}
+
+private extension Array where Element == CGFloat {
+    subscript(safe i: Int) -> CGFloat? {
+        indices.contains(i) ? self[i] : nil
     }
 }
 
@@ -192,9 +238,14 @@ struct FeedbackSettingsSheet: View {
                     slider("Pan X", $state.panX, in: -1...1)
                     slider("Pan Y", $state.panY, in: -1...1)
                     slider("Tilt", $state.tilt, in: -1...1)
-                    slider("Decay", $state.decay, in: 0.5...1.0)
-                    slider("Feedback Mix", $state.feedbackMix, in: 0...1)
-                    slider("Luminosity", $state.luminosity, in: 0...2)
+                    // The additive-blend topology lets the full range
+                    // be usable — old slider only went 0.5..1.0 because
+                    // crossfade-style feedback would crush the source
+                    // below that. Now 0 = no feedback, ~0.95 = CRT-
+                    // phosphor trails, 0.99 = very long.
+                    slider("Persistence", $state.decay, in: 0...1.0)
+                    slider("Input Gain", $state.feedbackMix, in: 0...2.0)
+                    slider("Bloom", $state.luminosity, in: 0.2...3.0)
                     slider("Chroma Boost", $state.chromaBoost, in: 0...3)
                 }
                 .padding(20)

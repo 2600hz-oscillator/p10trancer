@@ -27,22 +27,29 @@ final class FeedbackState: ObservableObject {
     /// (90° in either direction) for full sweep. 0 = level.
     @Published var tilt: Float = 0
 
-    /// Per-frame multiplier on the previous frame's contribution. <1 keeps
-    /// the loop from blowing out to white. Default 0.96 is "warm" feedback.
+    /// Per-frame persistence — how much of the previous frame's
+    /// energy carries forward (was `decay`; same shader binding). With
+    /// the new additive-blend topology the full 0..1 range is usable:
+    /// 0.94..0.98 gives camera-into-CRT phosphor trails, 0.999 is
+    /// "draw forever", 0 disables feedback. The Reinhard tonemap
+    /// downstream soft-clamps the sum so high persistence + input
+    /// gain doesn't blow the loop out to white.
     @Published var decay: Float = 0.96
 
-    /// Crossfade between source (0) and feedback (1) per frame. Higher =
-    /// more fractal, lower = more "live" with subtle trails.
-    @Published var feedbackMix: Float = 0.85
+    /// How brightly the live source punches in each frame (was
+    /// `feedbackMix` as a crossfade; now an additive gain). >1
+    /// lets fresh frames dominate long trails for strobe-y looks;
+    /// <1 keeps the source subtle and lets the feedback take over.
+    @Published var feedbackMix: Float = 0.6
 
-    /// Multiplier applied to the previous-frame sample BEFORE decay. Lets
-    /// the user counter the recursive darkening that happens when decay <
-    /// 1. Range 0…2; 1.0 is neutral.
-    @Published var luminosity: Float = 1.0
+    /// Pre-tonemap brightness multiplier — drives the highlight
+    /// rolloff harder for a brighter, blown-out vibe.
+    /// (Kept named `luminosity` for back-compat with LFO targets.)
+    @Published var luminosity: Float = 1.4
 
-    /// Saturation push on the previous-frame sample. Counters chroma loss
-    /// from repeated linear sampling. Range 0…3; 1.0 is neutral.
-    @Published var chromaBoost: Float = 1.0
+    /// Saturation push on the previous-frame sample. Counters chroma
+    /// loss from repeated linear sampling. Range 0…3; 1.0 is neutral.
+    @Published var chromaBoost: Float = 1.5
 
     init(inputSource: SourceRef = .pad(0)) {
         self.inputSource = inputSource
