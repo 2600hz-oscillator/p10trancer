@@ -114,6 +114,7 @@ final class AppState {
         P10Logger.log("[AppState] startIfNeeded — Phase 10b")
         AudioEngine.shared.startIfNeeded()
         AudioEngine.shared.masterVolume = mixer.masterVolume
+        performances.bootstrapFactoryIfNeeded()
         // Pre-install both audio taps. The persistent recorder tap on
         // mainMixer means REC doesn't need a graph reconfigure. The mic
         // tap on inputNode also runs for the app's lifetime; the queue

@@ -115,4 +115,78 @@ final class PerformanceStore: ObservableObject {
         try? FileManager.default.removeItem(at: dir)
         refreshList()
     }
+
+    // MARK: - Bootstrap
+
+    /// On first launch, materialize a "Factory" package by copying
+    /// the bundled padN.mp4 files into Documents/Performances/Factory/
+    /// and writing a manifest from a fresh-defaults SessionSpec.
+    /// Tracked in UserDefaults so we don't overwrite a user's edits
+    /// after they LOAD + tweak + re-SAVE "Factory".
+    static let factoryName = "Factory"
+    private static let bootstrappedDefaultsKey = "p10e.factoryBootstrapped"
+
+    func bootstrapFactoryIfNeeded() {
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: Self.bootstrappedDefaultsKey) {
+            return
+        }
+        let dir = packageURL(for: Self.factoryName)
+        let videosDir = dir.appendingPathComponent("videos", isDirectory: true)
+        do {
+            try? FileManager.default.removeItem(at: dir)
+            try FileManager.default.createDirectory(at: videosDir, withIntermediateDirectories: true)
+            var padSpecs: [SessionSpec.PadSpec] = []
+            for i in 0..<PadSystem.padCount {
+                let resource = "pad\(i + 1)"
+                let fx = SessionSpec.FXChainSpec(effects: [])
+                if let src = Bundle.main.url(forResource: resource, withExtension: "mp4") {
+                    let dest = videosDir.appendingPathComponent("\(resource).mp4")
+                    try FileManager.default.copyItem(at: src, to: dest)
+                    padSpecs.append(SessionSpec.PadSpec(
+                        index: i, kind: .empty,
+                        bundledIndex: nil, userVideoBasename: nil,
+                        packagedVideoBasename: "\(resource).mp4",
+                        cameraID: nil, keyerIndex: nil, fx: fx
+                    ))
+                } else {
+                    padSpecs.append(SessionSpec.PadSpec(
+                        index: i, kind: .empty,
+                        bundledIndex: nil, userVideoBasename: nil,
+                        packagedVideoBasename: nil,
+                        cameraID: nil, keyerIndex: nil, fx: fx
+                    ))
+                }
+            }
+            let spec = SessionSpec(
+                name: Self.factoryName,
+                pads: padSpecs,
+                keyers: [
+                    .init(foregroundPadIndex: 6, backgroundPadIndex: 7, kind: 0,
+                          threshold: 0.35, softness: 0.1, keyColor: [0, 1, 0]),
+                    .init(foregroundPadIndex: 7, backgroundPadIndex: 8, kind: 0,
+                          threshold: 0.35, softness: 0.1, keyColor: [0, 1, 0])
+                ],
+                mixer: .init(
+                    ch1Source: .init(kind: .pad, index: 0),
+                    ch2Source: .init(kind: .pad, index: 1),
+                    activeChannel: 0, transition: 0,
+                    position: 0, masterVolume: 0, outputMode: 0
+                ),
+                ntsc: .init(chromaBoost: 1.0, lumaNoise: 0, chromaNoise: 0,
+                             hsyncWobble: 0, dropoutRate: 0, burstPhaseShift: 0,
+                             subcarrierDrift: 0, ycDelay: 0, combStrength: 0.7,
+                             lumaPeaking: 0),
+                liveRecordings: []
+            )
+            let data = try JSONEncoder().encode(spec)
+            try data.write(to: dir.appendingPathComponent("manifest.json"), options: .atomic)
+            defaults.set(true, forKey: Self.bootstrappedDefaultsKey)
+            refreshList()
+            P10Logger.log("[PerformanceStore] bootstrapped Factory package")
+        } catch {
+            P10Logger.log("[PerformanceStore] bootstrap Factory failed: \(error)")
+            try? FileManager.default.removeItem(at: dir)
+        }
+    }
 }

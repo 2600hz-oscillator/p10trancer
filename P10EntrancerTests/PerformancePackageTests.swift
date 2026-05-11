@@ -31,6 +31,40 @@ final class PerformancePackageTests: XCTestCase {
         }
     }
 
+    /// Bootstrap creates Factory at /Documents/Performances/Factory/
+    /// with all bundled pad videos copied in, exactly once (idempotent
+    /// across calls so we don't blow away user-edited Factory).
+    func test_bootstrap_factory_creates_package_with_videos() throws {
+        // Clear the bootstrap flag so we can exercise the path.
+        UserDefaults.standard.removeObject(forKey: "p10e.factoryBootstrapped")
+        let store = PerformanceStore()
+        store.delete("Factory") // ensure a clean start
+        store.bootstrapFactoryIfNeeded()
+        XCTAssertTrue(store.names.contains("Factory"))
+        let manifest = try XCTUnwrap(store.loadManifest(name: "Factory"))
+        XCTAssertEqual(manifest.pads.count, PadSystem.padCount)
+        let packagedCount = manifest.pads.compactMap { $0.packagedVideoBasename }.count
+        XCTAssertEqual(packagedCount, PadSystem.padCount,
+                       "Every pad should have its bundled pad-N.mp4 packaged in Factory")
+    }
+
+    /// Export round-trip: archive Factory to a .aar, file lands on
+    /// disk, non-empty.
+    func test_export_writes_aar_file() throws {
+        let appState = AppState.shared
+        appState.startIfNeeded()
+        appState.performances.bootstrapFactoryIfNeeded()
+        let source = appState.performances.packageURL(for: "Factory")
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Factory-export-\(UUID().uuidString).aar")
+        defer { try? FileManager.default.removeItem(at: dest) }
+        let url = try PerformanceArchiver.archive(sourceDir: source, to: dest)
+        XCTAssertEqual(url, dest)
+        let size = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int) ?? 0
+        XCTAssertGreaterThan(size, 1024,
+                             "Exported .aar should be non-trivial (Factory has 9 video files)")
+    }
+
     /// Loading a package replaces each packaged pad's source with a
     /// VideoFileSource pointing at the package-local file (not the
     /// bundle copy).

@@ -10,6 +10,9 @@ struct SessionPanelView: View {
     @State private var showSettings = false
     @State private var showSavePerformanceAlert = false
     @State private var perfSaveDraft: String = ""
+    @State private var shareItems: [Any] = []
+    @State private var showShareSheet = false
+    @State private var shareError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,6 +62,17 @@ struct SessionPanelView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsPanelView(store: store)
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(items: shareItems)
+        }
+        .alert("Export failed", isPresented: .init(
+            get: { shareError != nil },
+            set: { if !$0 { shareError = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(shareError ?? "")
         }
     }
 
@@ -176,6 +190,18 @@ struct SessionPanelView: View {
         }
     }
 
+    private func exportPerformance(name: String) {
+        let sourceDir = AppState.shared.performances.packageURL(for: name)
+        let dest = PerformanceArchiver.tempArchiveURL(for: name)
+        do {
+            let archived = try PerformanceArchiver.archive(sourceDir: sourceDir, to: dest)
+            shareItems = [archived]
+            showShareSheet = true
+        } catch {
+            shareError = "Couldn't archive '\(name)': \(error)"
+        }
+    }
+
     private func performanceRow(name: String) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -197,6 +223,14 @@ struct SessionPanelView: View {
             .padding(.horizontal, 10).padding(.vertical, 4)
             .background(Color.white.opacity(0.06))
             .overlay(Rectangle().strokeBorder(Color.cyan.opacity(0.8), lineWidth: 1))
+            Button {
+                exportPerformance(name: name)
+            } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .foregroundStyle(.white)
+                    .padding(6)
+            }
+            .buttonStyle(.plain)
             Button {
                 AppState.shared.performances.delete(name)
             } label: {
