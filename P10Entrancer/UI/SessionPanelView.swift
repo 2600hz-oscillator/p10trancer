@@ -2,11 +2,14 @@ import SwiftUI
 
 struct SessionPanelView: View {
     @ObservedObject var store: SessionStore
+    @ObservedObject var performances: PerformanceStore
     @Environment(\.dismiss) private var dismiss
     @State private var showResetAlert = false
     @State private var showSaveAlert = false
     @State private var saveDraft: String = ""
     @State private var showSettings = false
+    @State private var showSavePerformanceAlert = false
+    @State private var perfSaveDraft: String = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,7 +17,13 @@ struct SessionPanelView: View {
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
             actionRow
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-            presetsList
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    presetsList
+                    performancesList
+                        .padding(.top, 18)
+                }
+            }
         }
         .background(.black)
         .preferredColorScheme(.dark)
@@ -35,6 +44,18 @@ struct SessionPanelView: View {
                 _ = AppState.shared.saveCurrentSession(as: trimmed)
                 saveDraft = ""
             }
+        }
+        .alert("Save performance package", isPresented: $showSavePerformanceAlert) {
+            TextField("Performance name", text: $perfSaveDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                let trimmed = perfSaveDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                _ = AppState.shared.savePerformance(named: trimmed)
+                perfSaveDraft = ""
+            }
+        } message: {
+            Text("Bundles all settings + each pad's video content into a single package on disk.")
         }
         .sheet(isPresented: $showSettings) {
             SettingsPanelView(store: store)
@@ -67,6 +88,10 @@ struct SessionPanelView: View {
             actionButton(label: "SAVE…", tint: .green) {
                 saveDraft = ""
                 showSaveAlert = true
+            }
+            actionButton(label: "PERF SAVE…", tint: .cyan) {
+                perfSaveDraft = ""
+                showSavePerformanceAlert = true
             }
             Spacer()
             settingsButton
@@ -115,18 +140,74 @@ struct SessionPanelView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .padding(.bottom, 4)
+            presetRow(name: SessionStore.factoryName, isFactory: true)
+            Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+            ForEach(store.savedNames, id: \.self) { name in
+                presetRow(name: name, isFactory: false)
+                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
+            }
+        }
+    }
 
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    presetRow(name: SessionStore.factoryName, isFactory: true)
+    private var performancesList: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("PERFORMANCES")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .tracking(2.0)
+                    .foregroundStyle(.cyan.opacity(0.7))
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            if performances.names.isEmpty {
+                Text("Save the current state + all pad videos as a portable package via PERF SAVE…")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(performances.names, id: \.self) { name in
+                    performanceRow(name: name)
                     Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                    ForEach(store.savedNames, id: \.self) { name in
-                        presetRow(name: name, isFactory: false)
-                        Rectangle().fill(Color.white.opacity(0.06)).frame(height: 1)
-                    }
                 }
             }
         }
+    }
+
+    private func performanceRow(name: String) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.white)
+                Text("package")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.cyan.opacity(0.6))
+            }
+            Spacer()
+            Button("LOAD") {
+                AppState.shared.loadPerformance(named: name)
+                store.hasUnsavedChanges = false
+                dismiss()
+            }
+            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Color.white.opacity(0.06))
+            .overlay(Rectangle().strokeBorder(Color.cyan.opacity(0.8), lineWidth: 1))
+            Button {
+                AppState.shared.performances.delete(name)
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.red.opacity(0.7))
+                    .padding(6)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 
     private func presetRow(name: String, isFactory: Bool) -> some View {

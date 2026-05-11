@@ -23,6 +23,11 @@ struct SessionSpec: Codable {
         var kind: PadSourceKind
         var bundledIndex: Int?           // 0..8 → padN.mp4
         var userVideoBasename: String?   // file in Documents/UserVideos/
+        /// When this spec lives inside a Performance package, the
+        /// pad's video file is bundled in `<package>/videos/<basename>`
+        /// and this field carries that basename. The loader prefers
+        /// this over `bundledIndex` / `userVideoBasename` when present.
+        var packagedVideoBasename: String?
         var cameraID: String?            // matches CameraDevice.id
         var keyerIndex: Int?             // 0 or 1
         var fx: FXChainSpec

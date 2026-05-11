@@ -48,7 +48,7 @@ struct BottomControlBar: View {
             FeedbackControlsView(system: feedbackSystem, mixer: mixer)
         }
         .sheet(isPresented: $showSession) {
-            SessionPanelView(store: sessions)
+            SessionPanelView(store: sessions, performances: AppState.shared.performances)
         }
         .alert("End session?", isPresented: $endSessionAlertShown) {
             Button("Cancel", role: .cancel) {}

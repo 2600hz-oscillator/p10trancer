@@ -24,6 +24,7 @@ final class AppState {
     let liveRecordings: LiveRecordingsStore
     let cameras = CameraRegistry()
     let sessions = SessionStore()
+    let performances = PerformanceStore()
     /// Master clock + transport for LFOs (and any future tempo-synced
     /// feature). Driven by internal pulse or external MIDI Clock.
     let transport = Transport()
@@ -376,6 +377,18 @@ final class AppState {
             }
         }
         print("[loadVideoAssets] loaded \(found)/\(PadSystem.padCount) pad sources")
+    }
+
+    /// Snapshot current state + every pad's video URL, ask the
+    /// PerformanceStore to write the package, return success.
+    @discardableResult
+    func savePerformance(named name: String) -> Bool {
+        let (spec, urls) = PerformanceCapture.snapshotForPackage(name: name, appState: self)
+        return performances.savePackage(name: name, spec: spec, videoFilesByPad: urls) != nil
+    }
+
+    func loadPerformance(named name: String) {
+        PerformanceCapture.apply(packageName: name, store: performances, to: self)
     }
 
     func setMasterFeedbackSource(at index: Int) {
