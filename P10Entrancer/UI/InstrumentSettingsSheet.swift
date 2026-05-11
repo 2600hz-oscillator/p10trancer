@@ -294,8 +294,12 @@ struct InstrumentSettingsSheet: View {
         let label = Self.semitoneLabels[semi]
         return Button {
             if let step = selectedStep {
+                // Sequence-record mode: assign + advance the cursor
+                // so the user can play a melody by tapping a step
+                // and then walking notes across the keyboard.
+                // Wraps at step 16 back to 0.
                 instrument.assignNote(stepIndex: step, semitoneFromC: semi)
-                selectedStep = nil
+                selectedStep = (step + 1) % StepSequencer.stepCount
             } else {
                 instrument.synth.frequencyHz = StepSequencer.frequencyHz(
                     forNote: (instrument.octave + 1) * 12 + semi)

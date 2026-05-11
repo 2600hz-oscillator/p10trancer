@@ -110,7 +110,7 @@ final class InstrumentSource: PadSource, ObservableObject {
     }
 
     func tick(timestamp: CFTimeInterval) {
-        renderStepGrid()
+        renderWavetableVisualization()
     }
 
     func assignNote(stepIndex: Int, semitoneFromC: Int) {
@@ -133,38 +133,150 @@ final class InstrumentSource: PadSource, ObservableObject {
         wavetableLabel = table.label
     }
 
-    private func renderStepGrid() {
+    /// Animated wavetable visualization — a port of WAVECEL's
+    /// wave3D card view. Frames are stacked back-to-front in
+    /// pseudo-perspective; the active frame (selected by `morph`)
+    /// is drawn in white, the rest in orange that fades toward the
+    /// back. Animates as morph changes (knob, LFO, or otherwise) —
+    /// the highlight slides across the stack.
+    private func renderWavetableVisualization() {
         guard let texture = currentTexture else { return }
         let w = textureWidth
         let h = textureHeight
-        let bgEmpty: UInt32  = 0xFF101010
-        let bgEnabled: UInt32 = 0xFF1E5E1E
-        let bgActive: UInt32  = 0xFFE0C840
-        let bgActiveOn: UInt32 = 0xFFE03020
-        let gridLine: UInt32 = 0xFF353535
-        for i in 0..<pixelBuffer.count { pixelBuffer[i] = bgEmpty }
-        let n = StepSequencer.stepCount
-        let cellW = w / n
-        let padding = 6
-        let yTop = padding
-        let yBot = h - padding
-        for s in 0..<n {
-            let xL = s * cellW + 2
-            let xR = (s + 1) * cellW - 2
-            let isCurrent = s == sequencer.currentStep && isPlaying
-            let isEnabled = sequencer.steps[s].enabled
-            let color: UInt32
-            if isCurrent && isEnabled { color = bgActiveOn }
-            else if isCurrent         { color = bgActive }
-            else if isEnabled         { color = bgEnabled }
-            else                      { color = gridLine }
-            for y in yTop..<yBot {
-                let row = y * w
-                for x in xL..<xR {
-                    if x >= 0 && x < w { pixelBuffer[row + x] = color }
+        let bg: UInt32 = 0xFF0A0C11
+        for i in 0..<pixelBuffer.count { pixelBuffer[i] = bg }
+
+        let snapshot = synth.tableSnapshot
+        let fc = snapshot.frameCount
+        guard fc > 0, snapshot.samples.count >= fc * WaveCelSynth.frameSize else {
+            uploadTexture(texture)
+            return
+        }
+
+        // Subsample frames + samples so the per-tick cost stays
+        // bounded for large tables (256-frame WAVs would otherwise
+        // rasterize ~65k line segments / frame).
+        let maxFramesDrawn = 24
+        let frameStride = max(1, fc / maxFramesDrawn)
+        let drawnFrameCount = (fc + frameStride - 1) / frameStride
+        let sampleStride = max(1, WaveCelSynth.frameSize / 60)
+
+        let margin = 6
+        let drawW = w - margin * 2
+        let drawH = h - margin * 2
+        let backWidth = Float(drawW) * 0.55
+        let frontWidth = Float(drawW) * 0.95
+        let totalDepth = Float(drawH) * 0.7
+        let yBack = Float(margin) + Float(drawH) * 0.05
+
+        // Highlight frame from current morph; clamped to drawn range.
+        let activeFrame = Int(round(Double(synth.morph) * Double(fc - 1)))
+        let activeDrawIndex = activeFrame / frameStride
+
+        snapshot.samples.withUnsafeBufferPointer { samples in
+            for di in 0..<drawnFrameCount {
+                let f = min(di * frameStride, fc - 1)
+                let t = drawnFrameCount > 1 ? Float(di) / Float(drawnFrameCount - 1) : 0
+                let frameW = backWidth + (frontWidth - backWidth) * t
+                let frameY = yBack + totalDepth * t
+                let xLeft = Float(margin) + (Float(drawW) - frameW) / 2
+                            + Float(drawW) * 0.05 * (t - 0.5) * 2
+                let sliceH = Float(drawH) * 0.16 * (0.6 + 0.4 * t)
+                let color: UInt32
+                let isActive = di == activeDrawIndex
+                if isActive {
+                    color = 0xFFFFFFFF
+                } else {
+                    // Orange that gets brighter (closer to front)
+                    // toward larger t.
+                    let alpha = 0.25 + 0.7 * t
+                    color = pack(r: 255, g: 150, b: 40, a: alpha)
                 }
+                drawFramePolyline(frame: f,
+                                  xLeft: xLeft,
+                                  frameY: frameY,
+                                  frameW: frameW,
+                                  sliceH: sliceH,
+                                  sampleStride: sampleStride,
+                                  samples: samples.baseAddress!,
+                                  color: color)
             }
         }
+        uploadTexture(texture)
+    }
+
+    /// Pseudo-alpha by blending toward the background. The pad
+    /// preview's CPU rasterizer can't do true alpha cheaply, so we
+    /// premultiply against the (constant) BG color here.
+    private func pack(r: Int, g: Int, b: Int, a: Float) -> UInt32 {
+        let bgR = 0x0A, bgG = 0x0C, bgB = 0x11
+        let rr = Int(Float(r) * a + Float(bgR) * (1 - a))
+        let gg = Int(Float(g) * a + Float(bgG) * (1 - a))
+        let bb = Int(Float(b) * a + Float(bgB) * (1 - a))
+        return 0xFF000000 | UInt32(rr) << 16 | UInt32(gg) << 8 | UInt32(bb)
+    }
+
+    private func drawFramePolyline(frame: Int,
+                                   xLeft: Float,
+                                   frameY: Float,
+                                   frameW: Float,
+                                   sliceH: Float,
+                                   sampleStride: Int,
+                                   samples: UnsafePointer<Float>,
+                                   color: UInt32) {
+        let frameOffset = frame * WaveCelSynth.frameSize
+        var prevX: Int = -1
+        var prevY: Int = -1
+        var s = 0
+        while s < WaveCelSynth.frameSize {
+            let sample = samples[frameOffset + s]
+            let xf = xLeft + (Float(s) / Float(WaveCelSynth.frameSize - 1)) * frameW
+            let yf = frameY - sample * sliceH
+            let x = Int(xf.rounded())
+            let y = Int(yf.rounded())
+            if prevX >= 0 {
+                drawLine(x0: prevX, y0: prevY, x1: x, y1: y, color: color)
+            }
+            prevX = x
+            prevY = y
+            s += sampleStride
+        }
+    }
+
+    /// Bresenham-style DDA on the shared pixel buffer. Clipped to
+    /// the texture bounds. No anti-aliasing — at 320×180 the
+    /// stair-stepping is small enough to read as smooth.
+    private func drawLine(x0: Int, y0: Int, x1: Int, y1: Int, color: UInt32) {
+        let w = textureWidth
+        let h = textureHeight
+        let dx = x1 - x0
+        let dy = y1 - y0
+        let steps = max(abs(dx), abs(dy))
+        if steps == 0 {
+            if x0 >= 0 && x0 < w && y0 >= 0 && y0 < h {
+                pixelBuffer[y0 * w + x0] = color
+            }
+            return
+        }
+        let invSteps = 1.0 / Float(steps)
+        let xInc = Float(dx) * invSteps
+        let yInc = Float(dy) * invSteps
+        var fx = Float(x0)
+        var fy = Float(y0)
+        for _ in 0...steps {
+            let x = Int(fx.rounded())
+            let y = Int(fy.rounded())
+            if x >= 0 && x < w && y >= 0 && y < h {
+                pixelBuffer[y * w + x] = color
+            }
+            fx += xInc
+            fy += yInc
+        }
+    }
+
+    private func uploadTexture(_ texture: MTLTexture) {
+        let w = textureWidth
+        let h = textureHeight
         pixelBuffer.withUnsafeBytes { bytes in
             texture.replace(region: MTLRegionMake2D(0, 0, w, h),
                             mipmapLevel: 0,

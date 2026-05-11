@@ -82,6 +82,14 @@ final class WaveCelSynth {
     var currentTableLabel: String { table.label }
     var currentTableFrameCount: Int { table.frameCount }
 
+    /// Read-only snapshot of the active table for the visualizer.
+    /// Swift Arrays are copy-on-write, so this is O(1) until the
+    /// caller mutates the returned array (which it shouldn't —
+    /// it's strictly for read access).
+    var tableSnapshot: (samples: [Float], frameCount: Int) {
+        (table.samples, table.frameCount)
+    }
+
     // MARK: - Render
 
     /// Render `count` stereo frames (interleaved is NOT used; we fill
