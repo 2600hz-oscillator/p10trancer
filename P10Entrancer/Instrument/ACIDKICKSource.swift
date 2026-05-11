@@ -47,6 +47,11 @@ final class ACIDKICKSource: PadSource, ObservableObject {
     private var powExpiry: CFTimeInterval = -.infinity
     private let powDurationSec: CFTimeInterval = 0.3
     private var startTime: CFTimeInterval = CACurrentMediaTime()
+    /// Frame counter for throttling. The visualizer runs every other
+    /// PadSystem tick (~30 fps at 60 fps host) — sin/cos-heavy per-cell
+    /// shading was the biggest main-thread time sink and 30 fps is
+    /// plenty for the chunky-pixel acidwarp aesthetic.
+    private var frameCounter: Int = 0
 
     init(transport: Transport, context: MetalContext = .shared) {
         self.context = context
@@ -104,7 +109,11 @@ final class ACIDKICKSource: PadSource, ObservableObject {
     }
 
     func tick(timestamp: CFTimeInterval) {
-        renderAcidwarp()
+        // Throttle the visualizer to every other frame. The acidwarp
+        // bands cost ~5M trig ops/sec at full rate which competes
+        // with SwiftUI layout + transport tick processing on main.
+        frameCounter &+= 1
+        if frameCounter & 1 == 0 { renderAcidwarp() }
     }
 
     /// Re-create voice objects whose type changed so the new sound

@@ -155,6 +155,8 @@ final class Transport: ObservableObject {
         internalTimer?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
         let interval = secondsPerTick()
+        // 1ms leeway is what the kernel comfortably honors; tighter
+        // doesn't actually improve precision on iOS but it adds CPU.
         timer.schedule(deadline: .now(), repeating: interval, leeway: .milliseconds(1))
         timer.setEventHandler { [weak self] in
             guard let self else { return }

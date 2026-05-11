@@ -66,6 +66,9 @@ final class InstrumentSource: PadSource, ObservableObject {
     /// stopped. Computed inside renderWavetableVisualization from
     /// the host CFTimeInterval to avoid a separate timer.
     private var vizStartTime: CFTimeInterval = CACurrentMediaTime()
+    /// Throttle counter — rendering N polylines per frame is the
+    /// expensive part of this visualizer, so we redraw at ~30 fps.
+    private var frameCounter: Int = 0
 
     init(transport: Transport, context: MetalContext = .shared) {
         self.context = context
@@ -130,7 +133,11 @@ final class InstrumentSource: PadSource, ObservableObject {
     }
 
     func tick(timestamp: CFTimeInterval) {
-        renderWavetableVisualization()
+        // Throttle to ~30 fps — the line rasterizer pays per visible
+        // frame × samples-per-frame and competes with sequencer +
+        // transport tick processing on the main thread.
+        frameCounter &+= 1
+        if frameCounter & 1 == 0 { renderWavetableVisualization() }
     }
 
     func assignNote(stepIndex: Int, semitoneFromC: Int) {
