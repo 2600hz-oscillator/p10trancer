@@ -19,7 +19,26 @@ final class PadAudioPlayer: ObservableObject {
 
     private let mixerNode = AVAudioMixerNode()
     private let playerNode = AVAudioPlayerNode()  // unused for .mic
+    /// Sits between playerNode and mixerNode for file pads. Driving
+    /// its `rate` makes the audio speed/pitch follow the video's
+    /// AVPlayer rate (tape-style: pitch tracks speed).
+    private let varispeed = AVAudioUnitVarispeed()
     private var buffer: AVAudioPCMBuffer?
+    private var audioFile: AVAudioFile?
+    private var fileFrameCount: AVAudioFramePosition = 0
+    /// Loop region in audio frames, matching the video's trim
+    /// region. Recomputed whenever the host VideoFileSource changes
+    /// trim points. The player node loops within this window using
+    /// scheduleSegment + completion-callback chaining.
+    private var loopStartFrame: AVAudioFramePosition = 0
+    private var loopEndFrame: AVAudioFramePosition = 0
+    /// Cache of params set before the file finished loading; applied
+    /// when loadFile completes so VideoFileSource can configure
+    /// trim/rate at init time without races.
+    private var pendingRate: Float = 1.0
+    private var pendingLoopStartNorm: Double = 0
+    private var pendingLoopEndNorm: Double = 1
+    private var isFilePlaying: Bool = true
     private var attachedFile = false
     private var attachedMic = false
 
@@ -83,11 +102,82 @@ final class PadAudioPlayer: ObservableObject {
     /// Pause/resume the file's audio playback. No-op for `.mic` source
     /// (the mic engine isn't gated by per-pad play state).
     func setPlaying(_ playing: Bool) {
-        guard case .file = source, attachedFile else { return }
+        guard case .file = source else { return }
+        isFilePlaying = playing
+        guard attachedFile else { return }
         if playing {
             if !playerNode.isPlaying { playerNode.play() }
         } else {
             playerNode.pause()
+        }
+    }
+
+    /// Mirror the host VideoFileSource's playback rate. Uses
+    /// AVAudioUnitVarispeed so pitch tracks speed (tape-style).
+    /// Clamped to the slider's 0.1×–4× range.
+    func setRate(_ rate: Float) {
+        let r = max(0.1, min(4.0, rate))
+        pendingRate = r
+        if attachedFile { varispeed.rate = r }
+    }
+
+    /// Mirror the host's trim region. The audio loops within this
+    /// fraction of the file [0..1]. Deliberately does NOT reschedule
+    /// the current segment — the trim brackets fire setLoopRegion
+    /// continuously while dragged, and restarting the player on
+    /// every drag tick would chop the audio into fragments. Instead
+    /// the currently-playing segment runs to its old end, then the
+    /// completion callback picks up the new bounds. Audio settles
+    /// into the new region within one loop iteration.
+    func setLoopRegion(startNormalized: Double, endNormalized: Double) {
+        pendingLoopStartNorm = startNormalized
+        pendingLoopEndNorm = endNormalized
+        guard attachedFile, fileFrameCount > 0 else { return }
+        let s = AVAudioFramePosition(Double(fileFrameCount) * startNormalized)
+        let e = AVAudioFramePosition(Double(fileFrameCount) * endNormalized)
+        loopStartFrame = max(0, min(s, fileFrameCount - 1))
+        loopEndFrame = max(loopStartFrame + 1, min(e, fileFrameCount))
+    }
+
+    /// Move the audio playhead to a fraction [0..1] of the full file
+    /// duration. Called from VideoFileSource.seek so audio re-anchors
+    /// when the user scrubs.
+    func seekToFraction(_ t: Double) {
+        guard attachedFile, fileFrameCount > 0 else { return }
+        let frame = AVAudioFramePosition(Double(fileFrameCount) * t)
+        let clamped = max(loopStartFrame, min(frame, loopEndFrame - 1))
+        rescheduleFrom(clamped)
+    }
+
+    /// Stops the player node (which clears any pending segments),
+    /// schedules a fresh segment from `frame` to `loopEndFrame`, and
+    /// resumes playback if the pad is currently playing. The
+    /// completion callback chain takes it from there.
+    private func rescheduleFrom(_ frame: AVAudioFramePosition) {
+        guard attachedFile, audioFile != nil else { return }
+        playerNode.stop()
+        scheduleLoopSegment(fromFrame: frame)
+        if isFilePlaying { playerNode.play() }
+    }
+
+    /// Schedules one segment from `startFrame` → `loopEndFrame`. On
+    /// completion the callback re-arms the next segment starting at
+    /// `loopStartFrame`, producing an indefinite trim-respecting
+    /// loop without buffer-loading overhead.
+    private func scheduleLoopSegment(fromFrame startFrame: AVAudioFramePosition) {
+        guard let file = audioFile else { return }
+        let segStart = max(loopStartFrame, min(startFrame, loopEndFrame - 1))
+        let segLength = AVAudioFrameCount(max(1, loopEndFrame - segStart))
+        playerNode.scheduleSegment(file,
+                                    startingFrame: segStart,
+                                    frameCount: segLength,
+                                    at: nil,
+                                    completionCallbackType: .dataPlayedBack) { [weak self] type in
+            guard type == .dataPlayedBack else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.scheduleLoopSegment(fromFrame: self.loopStartFrame)
+            }
         }
     }
 
@@ -106,16 +196,16 @@ final class PadAudioPlayer: ObservableObject {
                 P10Logger.log("[PadAudioPlayer:\(label)] no audio frames")
                 return
             }
-            guard let buf = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
-                P10Logger.log("[PadAudioPlayer:\(label)] could not allocate buffer")
-                return
-            }
-            try file.read(into: buf)
-            self.buffer = buf
+            self.audioFile = file
+            self.fileFrameCount = file.length
+            self.loopStartFrame = 0
+            self.loopEndFrame = file.length
 
             engine.attach(playerNode)
+            engine.attach(varispeed)
             engine.attach(mixerNode)
-            engine.connect(playerNode, to: mixerNode, format: format)
+            engine.connect(playerNode, to: varispeed, format: format)
+            engine.connect(varispeed, to: mixerNode, format: format)
             engine.connect(mixerNode, to: engine.mainMixerNode, format: nil)
             // VU tap on the per-pad mixer: post pad-volume + pad-mute,
             // pre-master. Lets the channel VU bounce with content
@@ -131,8 +221,15 @@ final class PadAudioPlayer: ObservableObject {
             applyEffectiveVolume()
             attachedFile = true
 
-            playerNode.scheduleBuffer(buf, at: nil, options: .loops, completionCallbackType: .dataPlayedBack) { _ in }
-            playerNode.play()
+            // Apply any rate/trim values the host set before loadFile
+            // completed (VideoFileSource may have already pushed
+            // defaults during its async start). After bounds are
+            // set, kick off the loop chain.
+            varispeed.rate = pendingRate
+            setLoopRegion(startNormalized: pendingLoopStartNorm,
+                          endNormalized: pendingLoopEndNorm)
+            scheduleLoopSegment(fromFrame: loopStartFrame)
+            if isFilePlaying { playerNode.play() }
             P10Logger.log("[PadAudioPlayer:\(label)] file loop frames=\(frameCount), default user vol \(volume)")
         } catch {
             P10Logger.log("[PadAudioPlayer:\(label)] load failed: \(error)")

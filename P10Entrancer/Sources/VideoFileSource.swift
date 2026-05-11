@@ -23,19 +23,27 @@ final class VideoFileSource: PadSource, ObservableObject {
 
     /// Playback rate as a multiplier of normal speed. 1.0 = normal,
     /// 0.5 = half, 2.0 = double. Range 0.1..4 enforced by the UI
-    /// slider — always forward (reverse playback was tried but the
-    /// AVPlayer behavior was too unreliable across the bundled
-    /// pads). Audio playback rate isn't matched; only video honors
-    /// speed changes.
+    /// slider — always forward. Audio rate tracks this via the pad
+    /// audio player's varispeed unit (pitch goes up with speed,
+    /// tape-style).
     @Published var playbackRate: Float = 1.0 {
-        didSet { applyRate() }
+        didSet {
+            applyRate()
+            audioPlayer.setRate(playbackRate)
+        }
     }
 
     /// Trim points as normalized [0..1] positions within the clip's
     /// full duration. When the player reaches trimEnd it loops back
     /// to trimStart. trimEnd > trimStart is enforced by the setters.
-    @Published var trimStart: Double = 0
-    @Published var trimEnd: Double = 1
+    /// The pad audio player mirrors this region so audio loops in
+    /// sync with the visible video.
+    @Published var trimStart: Double = 0 {
+        didSet { audioPlayer.setLoopRegion(startNormalized: trimStart, endNormalized: trimEnd) }
+    }
+    @Published var trimEnd: Double = 1 {
+        didSet { audioPlayer.setLoopRegion(startNormalized: trimStart, endNormalized: trimEnd) }
+    }
 
     /// Legacy shim from the AVAssetReader era — ThermalMonitor used
     /// to dial this down under heat to throttle pull rate. AVPlayer
@@ -148,6 +156,10 @@ final class VideoFileSource: PadSource, ObservableObject {
         let clamped = min(max(0, t), 1)
         let target = CMTime(seconds: durSec * clamped, preferredTimescale: 600)
         player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        // Pull the audio playhead along so the user-perceived
+        // pairing stays tight; otherwise the audio just keeps
+        // looping its own region at its own pace.
+        audioPlayer.seekToFraction(clamped)
         position = clamped
     }
 
