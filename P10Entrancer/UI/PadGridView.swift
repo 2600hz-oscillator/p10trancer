@@ -5,6 +5,7 @@ struct PadGridView: View {
     @ObservedObject var mixer: MixerState
     @ObservedObject var liveRecordings: LiveRecordingsStore
     @ObservedObject var cameras: CameraRegistry
+    @ObservedObject var transcodeManager: TranscodeManager = AppState.shared.transcodeManager
     @State private var importerVisible: Bool = false
     @State private var pendingPadIndex: Int = -1
     /// When non-nil, the pad index whose instrument settings sheet
@@ -111,12 +112,22 @@ struct PadGridView: View {
     @ViewBuilder
     private func padContextMenu(index: Int) -> some View {
         Button {
+            // Block the importer if a transcode is in flight —
+            // FFmpegKit serialises sessions internally and queueing
+            // another would just stall both. Users see a no-op tap
+            // here while the pad already shows the THINKING overlay.
+            guard !transcodeManager.isAnyActive else {
+                P10Logger.log("[PadGridView] Load Video blocked: transcode in flight")
+                return
+            }
             P10Logger.log("[PadGridView] Load Video tapped for pad \(index + 1)")
             pendingPadIndex = index
             importerVisible = true
         } label: {
-            Label("Load Video…", systemImage: "folder")
+            Label(transcodeManager.isAnyActive ? "Load Video… (transcoding…)" : "Load Video…",
+                  systemImage: "folder")
         }
+        .disabled(transcodeManager.isAnyActive)
         Menu {
             if cameras.devices.isEmpty {
                 Text("No cameras detected")
@@ -246,6 +257,12 @@ struct PadGridView: View {
                         }
                     }
             PadFooterControls(pad: pads.pads[index], padIndex: index)
+            // Transcode-in-flight overlay. Lives at the TOP of the
+            // ZStack so it eats taps to the underlying pad while
+            // ffmpeg is running — the pad's source isn't ready yet.
+            if let job = transcodeManager.job(for: index) {
+                TranscodeOverlayView(job: job)
+            }
         }
     }
 

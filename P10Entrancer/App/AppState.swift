@@ -6,6 +6,11 @@ import Combine
 final class AppState: ObservableObject {
     static let shared = AppState()
 
+    /// Tracks in-flight transcodes so the pad cells can show a
+    /// THINKING overlay + progress bar and the file picker can
+    /// reject new transcodes while one is running.
+    let transcodeManager = TranscodeManager()
+
     /// Render-quality knob for the per-pad preview thumbnails. Wired
     /// up via the Inspector panel; users on older iPads / heavy
     /// patches can drop to `.medium` or `.low` to keep transport
@@ -564,33 +569,52 @@ final class AppState: ObservableObject {
             return
         }
 
+        // Single-transcode-at-a-time policy. Refuse new jobs while
+        // one is running so the user can't pile up parallel ffmpeg
+        // sessions (each is CPU-bound — parallel just stalls all
+        // of them). The UI also blocks the Files importer when
+        // isAnyActive is true, so we should only hit this path on
+        // session-restore races.
+        guard !transcodeManager.isAnyActive else {
+            P10Logger.log("[AppState] pad \(index + 1) transcode refused: another transcode in flight")
+            try? FileManager.default.removeItem(at: dest)
+            return
+        }
+
         P10Logger.log("[AppState] pad \(index + 1): \(fileName) needs transcode → mp4")
-        // Co-locate the transcoded mp4 next to the original copy.
-        // We keep the basename but swap the extension so the user can
-        // tell which file is which if they go file-spelunking later.
         let outputURL = dest.deletingPathExtension().appendingPathExtension("mp4")
 
-        // The Task carries the work off the main actor; FFmpegKit
-        // runs on its own thread pool internally. The final
-        // pads.setSource hop is `@MainActor` so SwiftUI publishers
-        // and Metal resource creation stay on the main thread.
+        // Register the job so the pad cell can show its THINKING
+        // overlay + progress bar. The TranscodeManager publishes to
+        // SwiftUI on the main actor.
+        transcodeManager.start(padIndex: index, inputName: fileName)
+
+        // FFmpegKit runs on its own thread pool; the statistics
+        // callback fires off-actor. Hop to MainActor inside the
+        // closure to push the progress fraction into the manager.
         Task.detached { [weak self] in
             do {
-                _ = try await TranscodeService.transcodeToMP4(input: dest, output: outputURL)
-                // Original container is now superseded by the mp4;
-                // nuke it so we don't double-charge the user's
-                // Documents quota. Failure here is non-fatal — the
-                // transcoded mp4 is already where it needs to be.
+                _ = try await TranscodeService.transcodeToMP4(
+                    input: dest,
+                    output: outputURL,
+                    onProgress: { frac in
+                        Task { @MainActor [weak self] in
+                            self?.transcodeManager.update(padIndex: index, progress: frac)
+                        }
+                    }
+                )
                 try? FileManager.default.removeItem(at: dest)
                 await MainActor.run {
                     guard let self else { return }
+                    self.transcodeManager.finish(padIndex: index)
                     self.pads.setSource(VideoFileSource(url: outputURL), at: index)
                     P10Logger.log("[AppState] pad \(index + 1) source → transcoded \(outputURL.lastPathComponent)")
                 }
             } catch {
-                // Leave the original copy in place — the user can
-                // try a different file. No UI yet, just a log line.
                 P10Logger.log("[AppState] pad \(index + 1) transcode failed: \(error)")
+                await MainActor.run { [weak self] in
+                    self?.transcodeManager.finish(padIndex: index)
+                }
             }
         }
     }

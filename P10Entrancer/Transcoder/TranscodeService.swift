@@ -40,8 +40,18 @@ enum TranscodeService {
     /// callback back into the structured-concurrency caller via a
     /// CheckedContinuation. Throws on non-success return states or
     /// non-zero return codes.
+    ///
+    /// `onProgress` is called with a 0..1 fraction whenever
+    /// FFmpegKit's statistics callback fires (a few times per
+    /// second). The fraction is computed from the input's reported
+    /// duration (probed via FFprobeKit before the encode starts).
+    /// If duration can't be probed the callback still fires but the
+    /// fraction stays at 0 — UI should show a spinner rather than a
+    /// stalled bar in that case.
     @discardableResult
-    static func transcodeToMP4(input: URL, output: URL) async throws -> URL {
+    static func transcodeToMP4(input: URL,
+                                output: URL,
+                                onProgress: (@Sendable (Double) -> Void)? = nil) async throws -> URL {
         // Defensive: if a previous run left an output stub behind,
         // ffmpeg will prompt "y/N" for overwrite on stdin and hang
         // the session. Just remove it before kicking off the job.
@@ -78,36 +88,66 @@ enum TranscodeService {
         P10Logger.log("[Transcode] start: \(input.lastPathComponent) → \(output.lastPathComponent)")
         let startedAt = Date()
 
-        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
-            // executeAsync's completion block fires on FFmpegKit's
-            // own queue, NOT the main actor. We just resume the
-            // continuation; the caller hops back to whatever actor
-            // it needs.
-            FFmpegKit.executeAsync(cmd) { session in
-                let elapsed = Date().timeIntervalSince(startedAt)
-                let state = session?.getState() ?? .failed
-                let rc = session?.getReturnCode()
-                let succeeded = ReturnCode.isSuccess(rc)
-                let cancelled = ReturnCode.isCancel(rc)
-
-                if succeeded {
-                    P10Logger.log("[Transcode] OK in \(String(format: "%.1f", elapsed))s → \(output.lastPathComponent)")
-                    cont.resume(returning: output)
-                    return
-                }
-
-                // Pull the tail of the ffmpeg log so the failure
-                // reason ends up somewhere the user can find it.
-                // session.getAllLogsAsString blocks until logs are
-                // flushed; safe here because we're on FFmpegKit's
-                // own callback thread, not the main actor.
-                let logs = session?.getAllLogsAsString() ?? ""
-                let tail = String(logs.suffix(800))
-                let reason = cancelled ? "cancelled" : "state=\(state.rawValue) rc=\(rc?.getValue() ?? -1)"
-                P10Logger.log("[Transcode] FAILED (\(reason)) — log tail:\n\(tail)")
-                cont.resume(throwing: TranscodeError.failed(reason))
-            }
+        // Probe the input duration so the statistics callback can
+        // emit a real 0..1 progress fraction (ffmpeg only reports
+        // the current PTS, not a percentage). Best-effort: if
+        // probing fails or returns empty the progress just stays
+        // at 0 and the UI falls back to a "thinking" spinner.
+        let durationMs = probeDurationMs(input: input)
+        if durationMs > 0 {
+            P10Logger.log("[Transcode] input duration ≈ \(durationMs)ms")
+        } else {
+            P10Logger.log("[Transcode] input duration unknown — progress will not be reported")
         }
+
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
+            FFmpegKit.executeAsync(
+                cmd,
+                withCompleteCallback: { session in
+                    let elapsed = Date().timeIntervalSince(startedAt)
+                    let state = session?.getState() ?? .failed
+                    let rc = session?.getReturnCode()
+                    let succeeded = ReturnCode.isSuccess(rc)
+                    let cancelled = ReturnCode.isCancel(rc)
+
+                    if succeeded {
+                        P10Logger.log("[Transcode] OK in \(String(format: "%.1f", elapsed))s → \(output.lastPathComponent)")
+                        onProgress?(1.0)
+                        cont.resume(returning: output)
+                        return
+                    }
+                    let logs = session?.getAllLogsAsString() ?? ""
+                    let tail = String(logs.suffix(800))
+                    let reason = cancelled ? "cancelled" : "state=\(state.rawValue) rc=\(rc?.getValue() ?? -1)"
+                    P10Logger.log("[Transcode] FAILED (\(reason)) — log tail:\n\(tail)")
+                    cont.resume(throwing: TranscodeError.failed(reason))
+                },
+                withLogCallback: { _ in
+                    // Ignore — we only care about completion + stats.
+                    // The full session log is pulled on failure above.
+                },
+                withStatisticsCallback: { stats in
+                    guard let onProgress, durationMs > 0, let s = stats else { return }
+                    let timeMs = s.getTime()
+                    let frac = Double(timeMs) / Double(durationMs)
+                    onProgress(max(0, min(1, frac)))
+                }
+            )
+        }
+    }
+
+    /// Best-effort input duration in milliseconds. Returns 0 when
+    /// the file can't be probed (some webms / corrupt headers).
+    private static func probeDurationMs(input: URL) -> Int {
+        let session = FFprobeKit.getMediaInformation(input.path)
+        guard let info = session?.getMediaInformation() else { return 0 }
+        // Duration is returned as a NSString like "10.250000"
+        // (seconds, fractional). Container-level duration only —
+        // close enough for a progress bar even when stream-level
+        // durations differ slightly.
+        guard let str = info.getDuration() as String?,
+              let seconds = Double(str) else { return 0 }
+        return Int(seconds * 1000)
     }
 
     /// Quote a path for the single-string FFmpegKit command line so
