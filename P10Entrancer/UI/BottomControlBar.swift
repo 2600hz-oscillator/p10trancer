@@ -472,6 +472,11 @@ private struct InspectorSheet: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(.purple)
+                Button("Instrument") {
+                    AppState.shared.setInstrumentSource(at: mixer.inspectedPadIndex)
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
                 Button("Reset to Bundled") {
                     AppState.shared.reloadVideoSource(at: mixer.inspectedPadIndex)
                 }

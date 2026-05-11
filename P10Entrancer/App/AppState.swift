@@ -435,6 +435,15 @@ final class AppState {
         P10Logger.log("[AppState] pad \(index + 1) source → MasterFeedback")
     }
 
+    /// Replace a pad's source with a fresh wavetable instrument. Each
+    /// pad gets its own instance so step grids / ADSR / wavePosition
+    /// don't share state across pads.
+    func setInstrumentSource(at index: Int) {
+        let inst = InstrumentSource(transport: transport)
+        pads.setSource(inst, at: index)
+        P10Logger.log("[AppState] pad \(index + 1) source → Instrument (wavetable)")
+    }
+
     /// Set pad `targetIndex`'s source to forward another pad's
     /// processed texture. Refuses self-references (pad N can't chain
     /// from pad N — that's an infinite read on the same property).

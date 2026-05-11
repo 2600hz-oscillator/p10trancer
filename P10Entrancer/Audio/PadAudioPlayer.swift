@@ -11,6 +11,11 @@ final class PadAudioPlayer: ObservableObject {
     enum Source {
         case file(URL)
         case mic
+        /// Real-time synth source. The renderer is called from an
+        /// AVAudioSourceNode block on the audio thread to fill mono
+        /// sample buffers. Used by InstrumentSource for the wavetable
+        /// synth + ADSR path.
+        case synth(WavetableSynthRenderer)
     }
 
     private let engine: AVAudioEngine
@@ -41,6 +46,8 @@ final class PadAudioPlayer: ObservableObject {
     private var isFilePlaying: Bool = true
     private var attachedFile = false
     private var attachedMic = false
+    private var attachedSynth = false
+    private var synthSourceNode: AVAudioSourceNode?
 
     /// Default mic gain is 0 to avoid speaker→mic feedback the moment the
     /// user routes a camera pad. File pads still default to 0.7.
@@ -66,14 +73,18 @@ final class PadAudioPlayer: ObservableObject {
         self.source = source
         self.label = label
         switch source {
-        case .file: self.volume = 0.7
-        case .mic:  self.volume = 0
+        case .file:  self.volume = 0.7
+        case .mic:   self.volume = 0
+        case .synth: self.volume = 0.7
         }
         switch source {
         case .file(let url):
             Task { await self.loadFile(url: url) }
         case .mic:
             Task { await self.loadMic() }
+        case .synth(let renderer):
+            // Synth attachment is synchronous; no file I/O.
+            loadSynth(renderer: renderer)
         }
     }
 
@@ -234,6 +245,48 @@ final class PadAudioPlayer: ObservableObject {
         } catch {
             P10Logger.log("[PadAudioPlayer:\(label)] load failed: \(error)")
         }
+    }
+
+    /// Attach an AVAudioSourceNode driven by the synth renderer.
+    /// The node produces mono samples that flow through the per-pad
+    /// mixerNode (volume / mute / VU tap) into the engine's main mix.
+    private func loadSynth(renderer: WavetableSynthRenderer) {
+        // Use the engine output's sample rate so we don't have to
+        // think about re-sampling. Mono single-channel.
+        let outFmt = engine.outputNode.outputFormat(forBus: 0)
+        let sr = outFmt.sampleRate > 0 ? outFmt.sampleRate : 48000
+        guard let monoFmt = AVAudioFormat(standardFormatWithSampleRate: sr,
+                                          channels: 1) else {
+            P10Logger.log("[PadAudioPlayer:\(label)] synth fmt failed")
+            return
+        }
+        let node = AVAudioSourceNode(format: monoFmt) { _, _, frameCount, audioBufferList -> OSStatus in
+            // Real-time path: no allocations, no MainActor hops.
+            let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
+            guard let ptr = abl[0].mData?.assumingMemoryBound(to: Float.self) else {
+                return noErr
+            }
+            renderer.renderBlock(into: ptr,
+                                 count: Int(frameCount),
+                                 sampleRate: sr)
+            return noErr
+        }
+        self.synthSourceNode = node
+        engine.attach(node)
+        engine.attach(mixerNode)
+        engine.connect(node, to: mixerNode, format: monoFmt)
+        engine.connect(mixerNode, to: engine.mainMixerNode, format: nil)
+        mixerNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
+            guard let ch0 = buffer.floatChannelData?[0] else { return }
+            var sum: Float = 0
+            let n = Int(buffer.frameLength)
+            for i in 0..<n { sum += ch0[i] * ch0[i] }
+            let rms = sqrtf(sum / Float(max(1, n)))
+            Task { @MainActor [weak self] in self?.instantRMS = rms }
+        }
+        applyEffectiveVolume()
+        attachedSynth = true
+        P10Logger.log("[PadAudioPlayer:\(label)] synth attached, sr=\(sr)")
     }
 
     private func loadMic() async {

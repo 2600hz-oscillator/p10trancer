@@ -9,13 +9,28 @@ struct PadFooterControls: View {
     let padIndex: Int
 
     @State private var lfoSheet = false
+    @State private var instrumentSheet = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            // Top-right gear (waveform) — opens the per-pad LFO sheet.
+            // Top-right icons: waveform → LFO sheet, plus an
+            // instrument settings (sliders) icon when the pad is an
+            // instrument source.
             VStack {
                 HStack {
                     Spacer()
+                    if pad.source is InstrumentSource {
+                        Button { instrumentSheet = true } label: {
+                            Image(systemName: "pianokeys")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(5)
+                                .background(.black.opacity(0.55))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
+                    }
                     Button { lfoSheet = true } label: {
                         Image(systemName: "waveform.path.ecg")
                             .font(.system(size: 12, weight: .bold))
@@ -38,6 +53,11 @@ struct PadFooterControls: View {
                     availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: slot),
                     transport: AppState.shared.transport
                 )
+            }
+            .sheet(isPresented: $instrumentSheet) {
+                if let inst = pad.source as? InstrumentSource {
+                    InstrumentSettingsSheet(instrument: inst)
+                }
             }
             // VU meter on camera pads — confirms the mic is picking up
             // signal so the user knows whether their voice is being
