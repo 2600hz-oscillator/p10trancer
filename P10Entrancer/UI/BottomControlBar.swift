@@ -92,6 +92,7 @@ struct BottomControlBar: View {
                 set: { v in mixer.masterVolume = v; AudioEngine.shared.masterVolume = v }
             ), in: 0...1)
             verticalDivider
+            MasterTransportButton(transport: AppState.shared.transport)
             recordButton
         }
         .padding(.horizontal, 14)
@@ -353,6 +354,31 @@ struct BottomControlBar: View {
 
     private var verticalDivider: some View {
         Rectangle().fill(Color.white.opacity(0.14)).frame(width: 1)
+    }
+}
+
+/// Master transport (play / stop). Sits next to the REC button so
+/// the two top-level "start the world running" controls live
+/// together. The full transport panel (BPM, tap, clock source) is
+/// still available via the AUTO… button.
+private struct MasterTransportButton: View {
+    @ObservedObject var transport: Transport
+
+    var body: some View {
+        Button(action: { transport.toggleRunning() }) {
+            VStack(spacing: 2) {
+                Image(systemName: transport.isRunning ? "stop.fill" : "play.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(transport.isRunning ? .red : .green)
+                Text(transport.isRunning ? "STOP" : "PLAY")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 70, height: 60)
+            .background(transport.isRunning ? Color.green.opacity(0.18) : Color.white.opacity(0.08))
+            .overlay(Rectangle().strokeBorder(transport.isRunning ? Color.green : Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 }
 
