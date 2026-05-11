@@ -40,21 +40,34 @@ final class ADSREnvelope {
     var isIdle: Bool { stage == .idle }
 
     /// Multiply `count` samples in `buffer` by the envelope in-place.
+    /// Advances envelope state by `count` samples.
     func applyBlock(buffer: UnsafeMutablePointer<Float>, count: Int, sampleRate: Double) {
+        renderInto(buffer: buffer, count: count, sampleRate: sampleRate, multiply: true)
+    }
+
+    /// Fill `buffer` with the envelope shape directly (no input
+    /// multiplication). Useful when applying the same envelope to
+    /// multiple channels — render once, multiply L + R by the buffer.
+    /// Advances envelope state by `count` samples.
+    func fillEnvelope(into buffer: UnsafeMutablePointer<Float>, count: Int, sampleRate: Double) {
+        renderInto(buffer: buffer, count: count, sampleRate: sampleRate, multiply: false)
+    }
+
+    @inline(__always)
+    private func renderInto(buffer: UnsafeMutablePointer<Float>,
+                            count: Int,
+                            sampleRate: Double,
+                            multiply: Bool) {
         let sr = Float(sampleRate)
-        // Pre-compute per-sample slopes for whichever stage we're in.
-        // Re-derived inside the loop on stage transitions.
         for i in 0..<count {
             switch stage {
             case .idle:
                 level = 0
             case .attack:
-                // linear ramp 0 → 1 over `attack` seconds
                 let inc = 1.0 / max(0.0001, attack * sr)
                 level += inc
                 if level >= 1 { level = 1; stage = .decay }
             case .decay:
-                // exponential-ish toward sustain via per-sample tau
                 let inc = (sustain - 1.0) / max(0.0001, decay * sr)
                 level += inc
                 if level <= sustain { level = sustain; stage = .sustain }
@@ -65,7 +78,7 @@ final class ADSREnvelope {
                 level += inc
                 if level <= 0.0001 { level = 0; stage = .idle }
             }
-            buffer[i] *= level
+            if multiply { buffer[i] *= level } else { buffer[i] = level }
         }
     }
 

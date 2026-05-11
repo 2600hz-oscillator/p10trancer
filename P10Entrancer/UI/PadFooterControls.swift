@@ -76,12 +76,16 @@ struct PadFooterControls: View {
         }
     }
 
-    /// Only file pads support play/stop. Cameras, keyers, feedback
-    /// sources show the icon greyed out and tappable-but-no-op.
+    /// File pads control AVPlayer playback; instrument pads control
+    /// whether the step sequencer advances on Transport ticks.
+    /// Cameras / keyers / feedback / image sources show the icon
+    /// greyed out and tappable-but-no-op.
     @ViewBuilder
     private var playStopButton: some View {
         if let video = pad.source as? VideoFileSource {
             VideoPlayStopIcon(video: video, padIndex: padIndex)
+        } else if let inst = pad.source as? InstrumentSource {
+            InstrumentPlayStopIcon(instrument: inst, padIndex: padIndex)
         } else {
             Image(systemName: "play.fill")
                 .font(.system(size: 14, weight: .bold))
@@ -119,6 +123,29 @@ private struct VideoPlayStopIcon: View {
         Button {
             video.isPlaying.toggle()
             P10Logger.log("[PadFooter] pad \(padIndex + 1) play=\(video.isPlaying)")
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(6)
+                .background(.black.opacity(0.55))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Play/stop the instrument's 16-step sequencer loop. Pause cleanly
+/// gates the ADSR off and parks the playhead at step 0.
+private struct InstrumentPlayStopIcon: View {
+    @ObservedObject var instrument: InstrumentSource
+    let padIndex: Int
+
+    var body: some View {
+        let icon = instrument.isPlaying ? "pause.fill" : "play.fill"
+        Button {
+            instrument.isPlaying.toggle()
+            P10Logger.log("[PadFooter] pad \(padIndex + 1) instrument play=\(instrument.isPlaying)")
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .bold))

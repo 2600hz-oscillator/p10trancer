@@ -4,39 +4,62 @@ import XCTest
 @MainActor
 final class InstrumentTests: XCTestCase {
 
-    // MARK: - Wavetable synth
+    // MARK: - WaveCel synth
 
-    func test_synth_renders_nonzero_samples_at_default_freq() {
-        let synth = WavetableSynth()
-        var buf = [Float](repeating: 0, count: 512)
-        buf.withUnsafeMutableBufferPointer { ptr in
-            synth.renderBlock(into: ptr.baseAddress!, count: 512, sampleRate: 48000)
+    func test_synth_renders_nonzero_stereo_samples_at_default_freq() {
+        let synth = WaveCelSynth()
+        var l = [Float](repeating: 0, count: 512)
+        var r = [Float](repeating: 0, count: 512)
+        l.withUnsafeMutableBufferPointer { lp in
+            r.withUnsafeMutableBufferPointer { rp in
+                synth.renderBlock(left: lp.baseAddress!, right: rp.baseAddress!,
+                                  count: 512, sampleRate: 48000)
+            }
         }
-        // Default frequency is 261.626 Hz; over 512 samples at 48k
-        // we cover ~10 ms ≈ 2.8 cycles → samples must vary.
-        let mn = buf.min() ?? 0
-        let mx = buf.max() ?? 0
-        XCTAssertGreaterThan(mx - mn, 0.5,
-                             "Synth should produce a meaningful waveform, got peak-to-peak \(mx - mn)")
+        let pp = (l.max() ?? 0) - (l.min() ?? 0)
+        XCTAssertGreaterThan(pp, 0.3,
+            "WAVECEL should emit a meaningful waveform (peak-to-peak \(pp))")
     }
 
-    func test_synth_phase_advances_with_frequency() {
-        let synth = WavetableSynth()
-        synth.frequencyHz = 1000
-        var buf1 = [Float](repeating: 0, count: 48)
-        var buf2 = [Float](repeating: 0, count: 48)
-        buf1.withUnsafeMutableBufferPointer { p in
-            synth.renderBlock(into: p.baseAddress!, count: 48, sampleRate: 48000)
+    func test_synth_spread_widens_stereo_image() {
+        // Spread=1: L == R (mono on both). Spread>1: channels differ.
+        let synth = WaveCelSynth()
+        synth.morph = 0.5
+        synth.spread = 1
+        var l1 = [Float](repeating: 0, count: 256)
+        var r1 = [Float](repeating: 0, count: 256)
+        l1.withUnsafeMutableBufferPointer { lp in
+            r1.withUnsafeMutableBufferPointer { rp in
+                synth.renderBlock(left: lp.baseAddress!, right: rp.baseAddress!,
+                                  count: 256, sampleRate: 48000)
+            }
         }
-        buf2.withUnsafeMutableBufferPointer { p in
-            synth.renderBlock(into: p.baseAddress!, count: 48, sampleRate: 48000)
+        XCTAssertEqual(l1, r1, "spread=1 must produce identical L/R")
+        synth.spread = 5
+        var l5 = [Float](repeating: 0, count: 256)
+        var r5 = [Float](repeating: 0, count: 256)
+        l5.withUnsafeMutableBufferPointer { lp in
+            r5.withUnsafeMutableBufferPointer { rp in
+                synth.renderBlock(left: lp.baseAddress!, right: rp.baseAddress!,
+                                  count: 256, sampleRate: 48000)
+            }
         }
-        // 48 samples at 48k = 1ms; at 1kHz that's exactly one cycle.
-        // Second buffer should differ from the first at start
-        // because phase carries over (drift across cycles is small
-        // but nonzero due to floating point).
-        XCTAssertFalse(buf1 == buf2,
-                       "Phase should persist across renderBlock calls")
+        XCTAssertNotEqual(l5, r5, "spread=5 should diverge L from R")
+    }
+
+    func test_synth_fold_clips_amplitude_into_range() {
+        let synth = WaveCelSynth()
+        synth.fold = 1.0
+        var l = [Float](repeating: 0, count: 256)
+        var r = [Float](repeating: 0, count: 256)
+        l.withUnsafeMutableBufferPointer { lp in
+            r.withUnsafeMutableBufferPointer { rp in
+                synth.renderBlock(left: lp.baseAddress!, right: rp.baseAddress!,
+                                  count: 256, sampleRate: 48000)
+            }
+        }
+        XCTAssertTrue(l.allSatisfy { abs($0) <= 1.001 },
+                      "Wavefolder must keep output within ±1")
     }
 
     // MARK: - ADSR
@@ -114,6 +137,21 @@ final class InstrumentTests: XCTestCase {
         for _ in 0..<96 { seq.handleTick() }
         XCTAssertEqual(seq.currentStep, 0,
                        "After exactly one pattern, playhead should wrap back to 0")
+    }
+
+    // MARK: - E352 parser
+
+    func test_bundled_voxsynth_parses_into_frames() throws {
+        let table = WaveCelTableLoader.loadBundled("VOXSYNTH")
+        XCTAssertNotNil(table, "VOXSYNTH wavetable must ship in the bundle")
+        if let t = table {
+            // Each frame is 256 samples; the table at minimum has 32
+            // frames per the E352 standard but typically 64 here.
+            XCTAssertGreaterThanOrEqual(t.frameCount, 32)
+            XCTAssertEqual(t.samples.count, t.frameCount * WaveCelSynth.frameSize)
+            XCTAssertTrue(t.samples.allSatisfy { abs($0) <= 1.001 },
+                          "All wavetable samples must lie in -1..+1")
+        }
     }
 
     // MARK: - Frequency conversion

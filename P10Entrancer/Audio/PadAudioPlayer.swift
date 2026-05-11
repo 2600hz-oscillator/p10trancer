@@ -12,10 +12,10 @@ final class PadAudioPlayer: ObservableObject {
         case file(URL)
         case mic
         /// Real-time synth source. The renderer is called from an
-        /// AVAudioSourceNode block on the audio thread to fill mono
-        /// sample buffers. Used by InstrumentSource for the wavetable
-        /// synth + ADSR path.
-        case synth(WavetableSynthRenderer)
+        /// AVAudioSourceNode block on the audio thread to fill
+        /// stereo sample buffers. Used by InstrumentSource for the
+        /// WAVECEL wavetable synth + ADSR path.
+        case synth(WaveCelSynthRenderer)
     }
 
     private let engine: AVAudioEngine
@@ -247,35 +247,39 @@ final class PadAudioPlayer: ObservableObject {
         }
     }
 
-    /// Attach an AVAudioSourceNode driven by the synth renderer.
-    /// The node produces mono samples that flow through the per-pad
-    /// mixerNode (volume / mute / VU tap) into the engine's main mix.
-    private func loadSynth(renderer: WavetableSynthRenderer) {
-        // Use the engine output's sample rate so we don't have to
-        // think about re-sampling. Mono single-channel.
+    /// Attach a stereo AVAudioSourceNode driven by the WAVECEL synth
+    /// renderer. The node produces stereo (L/R) samples that flow
+    /// through the per-pad mixerNode (volume / mute / VU tap) into
+    /// the engine's main mix.
+    private func loadSynth(renderer: WaveCelSynthRenderer) {
         let outFmt = engine.outputNode.outputFormat(forBus: 0)
         let sr = outFmt.sampleRate > 0 ? outFmt.sampleRate : 48000
-        guard let monoFmt = AVAudioFormat(standardFormatWithSampleRate: sr,
-                                          channels: 1) else {
-            P10Logger.log("[PadAudioPlayer:\(label)] synth fmt failed")
+        // Stereo non-interleaved is the most natural shape for
+        // AVAudioSourceNode + AVAudioEngine — channels live in two
+        // separate Float pointers in the AudioBufferList.
+        guard let stereoFmt = AVAudioFormat(standardFormatWithSampleRate: sr,
+                                            channels: 2) else {
+            P10Logger.log("[PadAudioPlayer:\(label)] synth stereo fmt failed")
             return
         }
-        let node = AVAudioSourceNode(format: monoFmt) { _, _, frameCount, audioBufferList -> OSStatus in
-            // Real-time path: no allocations, no MainActor hops.
+        let node = AVAudioSourceNode(format: stereoFmt) { _, _, frameCount, audioBufferList -> OSStatus in
             let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
-            guard let ptr = abl[0].mData?.assumingMemoryBound(to: Float.self) else {
+            guard abl.count >= 2,
+                  let lPtr = abl[0].mData?.assumingMemoryBound(to: Float.self),
+                  let rPtr = abl[1].mData?.assumingMemoryBound(to: Float.self) else {
                 return noErr
             }
-            renderer.renderBlock(into: ptr,
-                                 count: Int(frameCount),
-                                 sampleRate: sr)
+            renderer.renderStereoBlock(left: lPtr, right: rPtr,
+                                       count: Int(frameCount),
+                                       sampleRate: sr)
             return noErr
         }
         self.synthSourceNode = node
         engine.attach(node)
         engine.attach(mixerNode)
-        engine.connect(node, to: mixerNode, format: monoFmt)
+        engine.connect(node, to: mixerNode, format: stereoFmt)
         engine.connect(mixerNode, to: engine.mainMixerNode, format: nil)
+        // VU tap averages the two channels for the pad's RMS read.
         mixerNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
             guard let ch0 = buffer.floatChannelData?[0] else { return }
             var sum: Float = 0
@@ -286,7 +290,7 @@ final class PadAudioPlayer: ObservableObject {
         }
         applyEffectiveVolume()
         attachedSynth = true
-        P10Logger.log("[PadAudioPlayer:\(label)] synth attached, sr=\(sr)")
+        P10Logger.log("[PadAudioPlayer:\(label)] synth attached, sr=\(sr) (stereo)")
     }
 
     private func loadMic() async {

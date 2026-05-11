@@ -1,21 +1,32 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
-/// Per-instrument sheet: 16-step grid + 1-octave keyboard + OCTAVE
-/// arrows + ADSR + wavetable position. Workflow:
-///   1. Tap a step → step becomes the "selected" target
-///   2. Tap a key → that note is assigned to the selected step and
-///      the step turns on
-///   3. Tap a step again to toggle its enabled state
+/// Per-instrument sheet: WAVECEL controls + 16-step grid + 1-octave
+/// keyboard with OCTAVE arrows + ADSR. Layout matches the WAVECEL
+/// card from patchtogether.live — tune / fine / morph / spread / fold
+/// plus a wavetable picker that supports the bundled tables or any
+/// E352-format WAV from the Files picker.
 struct InstrumentSettingsSheet: View {
     @ObservedObject var instrument: InstrumentSource
     @ObservedObject var sequencer: StepSequencer
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedStep: Int? = nil
+    @State private var importerVisible: Bool = false
+    @State private var tuneTick = UUID()  // forces re-render when the
+    @State private var fineTick = UUID()  // synth's k-rate values change
+    @State private var morphTick = UUID()
+    @State private var spreadTick = UUID()
+    @State private var foldTick = UUID()
 
-    /// SF-style note labels for the bottom row of the keyboard.
     private static let semitoneLabels = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-    private static let blackKeys: Set<Int> = [1, 3, 6, 8, 10]
+
+    /// Names of WAVs bundled under Resources/Wavetables.
+    private static let bundledTables: [(label: String, resource: String)] = [
+        ("VOXSYNTH", "VOXSYNTH"),
+        ("ACID_RIN", "ACID_RIN"),
+        ("DEFAULT (synth)", "")  // empty = use the synthesized default
+    ]
 
     init(instrument: InstrumentSource) {
         self.instrument = instrument
@@ -28,20 +39,32 @@ struct InstrumentSettingsSheet: View {
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    waveCelSection
                     stepGridSection
                     keyboardSection
-                    waveAndADSRSection
+                    adsrSection
                 }
                 .padding(20)
             }
         }
         .background(.black)
         .preferredColorScheme(.dark)
+        .fileImporter(isPresented: $importerVisible,
+                      allowedContentTypes: [UTType.wav, UTType.audio],
+                      allowsMultipleSelection: false) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                if let table = WaveCelTableLoader.load(url: url, label: url.deletingPathExtension().lastPathComponent) {
+                    instrument.loadTable(table)
+                }
+            }
+        }
     }
 
     private var header: some View {
         HStack {
-            Text("INSTRUMENT — WAVETABLE")
+            Text("WAVECEL — INSTRUMENT")
                 .font(.system(size: 14, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white).tracking(2.0)
             Spacer()
@@ -51,6 +74,97 @@ struct InstrumentSettingsSheet: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
+
+    // MARK: - WAVECEL block
+
+    private var waveCelSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("WAVETABLE")
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Text(instrument.wavetableLabel)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(.white.opacity(0.08))
+                    .overlay(Rectangle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
+            }
+            HStack(spacing: 8) {
+                ForEach(Self.bundledTables, id: \.label) { entry in
+                    Button(entry.label) {
+                        if entry.resource.isEmpty {
+                            instrument.loadTable(WaveCelSynth.defaultTable())
+                        } else if let t = WaveCelTableLoader.loadBundled(entry.resource) {
+                            instrument.loadTable(t)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.orange)
+                }
+                Button("Load WAV…") { importerVisible = true }
+                    .buttonStyle(.bordered)
+                    .tint(.blue)
+            }
+            .font(.system(size: 11, design: .monospaced))
+            // Five WAVECEL params, two rows for breathing room.
+            HStack(spacing: 12) {
+                paramSlider(label: "TUNE", value: synthBinding(\.tune, tick: $tuneTick),
+                            range: -36...36, unit: "st", format: "%+.0f")
+                paramSlider(label: "FINE", value: synthBinding(\.fine, tick: $fineTick),
+                            range: -100...100, unit: "¢", format: "%+.0f")
+                paramSlider(label: "MORPH", value: synthBinding(\.morph, tick: $morphTick),
+                            range: 0...1, unit: "", format: "%.2f")
+            }
+            HStack(spacing: 12) {
+                paramSlider(label: "SPREAD", value: synthBinding(\.spread, tick: $spreadTick),
+                            range: 1...5, unit: "", format: "%.1f")
+                paramSlider(label: "FOLD", value: synthBinding(\.fold, tick: $foldTick),
+                            range: 0...1, unit: "", format: "%.2f")
+                Spacer().frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    /// WAVECEL params live on a non-@Published synth, so we go through
+    /// a manual binding + UUID-tick re-render to keep the slider value
+    /// in sync. (The synth isn't an ObservableObject because its
+    /// fields are read from the audio thread; @Published would push
+    /// objectWillChange notifications on every parameter tweak which
+    /// is fine, but it would also force MainActor isolation. The
+    /// UUID-tick is a small workaround.)
+    private func synthBinding(_ keyPath: ReferenceWritableKeyPath<WaveCelSynth, Float>,
+                              tick: Binding<UUID>) -> Binding<Float> {
+        Binding(
+            get: { instrument.synth[keyPath: keyPath] },
+            set: { newValue in
+                instrument.synth[keyPath: keyPath] = newValue
+                tick.wrappedValue = UUID()
+            }
+        )
+    }
+
+    private func paramSlider(label: String,
+                              value: Binding<Float>,
+                              range: ClosedRange<Float>,
+                              unit: String,
+                              format: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.65))
+                Spacer()
+                Text("\(String(format: format, value.wrappedValue))\(unit)")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            Slider(value: value, in: range).tint(.orange)
+        }
+    }
+
+    // MARK: - Step grid
 
     private var stepGridSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -74,7 +188,6 @@ struct InstrumentSettingsSheet: View {
         let border: Color = isSelected ? .yellow : (isCurrent ? .white : .white.opacity(0.3))
         return Button {
             if selectedStep == i {
-                // Tapping the already-selected step toggles its state.
                 instrument.toggleStep(i)
                 selectedStep = nil
             } else {
@@ -101,6 +214,8 @@ struct InstrumentSettingsSheet: View {
         let semi = midi % 12
         return "\(semitoneLabels[semi])\(octave)"
     }
+
+    // MARK: - Keyboard
 
     private var keyboardSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -142,10 +257,6 @@ struct InstrumentSettingsSheet: View {
     }
 
     private var keyboard: some View {
-        // 12 keys laid out as a 1-octave piano. Black keys are
-        // rendered as smaller, taller-z overlays so they look like
-        // actual sharps; white keys handle the gaps. Picking a key
-        // when a step is selected assigns that note to the step.
         GeometryReader { geo in
             let whiteIndices = [0, 2, 4, 5, 7, 9, 11]
             let blackPositions: [(semi: Int, after: Int)] = [
@@ -157,7 +268,6 @@ struct InstrumentSettingsSheet: View {
             let blackW = whiteW * 0.6
             let blackH = h * 0.6
             ZStack(alignment: .topLeading) {
-                // White keys
                 HStack(spacing: 1) {
                     ForEach(0..<whiteCount, id: \.self) { wi in
                         let semi = whiteIndices[wi]
@@ -166,7 +276,6 @@ struct InstrumentSettingsSheet: View {
                     }
                 }
                 .frame(height: h)
-                // Black keys overlaid at proper positions
                 ForEach(0..<blackPositions.count, id: \.self) { bi in
                     let pos = blackPositions[bi]
                     keyButton(semi: pos.semi, isBlack: true)
@@ -187,9 +296,6 @@ struct InstrumentSettingsSheet: View {
                 instrument.assignNote(stepIndex: step, semitoneFromC: semi)
                 selectedStep = nil
             } else {
-                // Preview: temporarily play the note via a single
-                // gate cycle. Quick on/off so the user can audition
-                // without assigning.
                 instrument.synth.frequencyHz = StepSequencer.frequencyHz(
                     forNote: (instrument.octave + 1) * 12 + semi)
                 instrument.adsr.setGate(true)
@@ -213,36 +319,38 @@ struct InstrumentSettingsSheet: View {
         .buttonStyle(.plain)
     }
 
-    private var waveAndADSRSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("WAVE POSITION")
-                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
-                Slider(value: $instrument.wavePosition, in: 0...1).tint(.orange)
-            }
+    // MARK: - ADSR
+
+    private var adsrSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ADSR")
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.7))
             HStack(spacing: 12) {
-                adsrKnob(label: "ATTACK",
-                         value: Binding(get: { instrument.adsr.attack },
-                                        set: { instrument.adsr.attack = $0 }),
-                         range: 0.001...2.0)
-                adsrKnob(label: "DECAY",
-                         value: Binding(get: { instrument.adsr.decay },
-                                        set: { instrument.adsr.decay = $0 }),
-                         range: 0.001...2.0)
-                adsrKnob(label: "SUSTAIN",
-                         value: Binding(get: { instrument.adsr.sustain },
-                                        set: { instrument.adsr.sustain = $0 }),
-                         range: 0...1)
-                adsrKnob(label: "RELEASE",
-                         value: Binding(get: { instrument.adsr.release },
-                                        set: { instrument.adsr.release = $0 }),
-                         range: 0.001...3.0)
+                adsrSlider(label: "ATTACK",
+                           value: adsrBinding(\.attack),
+                           range: 0.001...2.0)
+                adsrSlider(label: "DECAY",
+                           value: adsrBinding(\.decay),
+                           range: 0.001...2.0)
+                adsrSlider(label: "SUSTAIN",
+                           value: adsrBinding(\.sustain),
+                           range: 0...1)
+                adsrSlider(label: "RELEASE",
+                           value: adsrBinding(\.release),
+                           range: 0.001...3.0)
             }
         }
     }
 
-    private func adsrKnob(label: String, value: Binding<Float>, range: ClosedRange<Float>) -> some View {
+    private func adsrBinding(_ keyPath: ReferenceWritableKeyPath<ADSREnvelope, Float>) -> Binding<Float> {
+        Binding(
+            get: { instrument.adsr[keyPath: keyPath] },
+            set: { instrument.adsr[keyPath: keyPath] = $0 }
+        )
+    }
+
+    private func adsrSlider(label: String, value: Binding<Float>, range: ClosedRange<Float>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(.system(size: 9, weight: .heavy, design: .monospaced))

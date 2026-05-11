@@ -35,6 +35,62 @@ enum LFOTargets {
                 ))
             }
         }
+        // When the pad is an instrument, the synth + ADSR live
+        // ON THIS PAD — surface them so the per-pad LFO can sweep
+        // their params (tune / fine / morph / spread / fold) and
+        // the four ADSR stages.
+        if let inst = pad.source as? InstrumentSource {
+            let synth = inst.synth
+            let adsr = inst.adsr
+            // WAVECEL params.
+            targets += [
+                LFOTarget(id: "pad.\(index).synth.tune",
+                          displayName: "PAD \(padNumber): SYNTH — Tune",
+                          range: -36...36,
+                          getBase: { synth.tune },
+                          setEffective: { synth.tune = $0 }),
+                LFOTarget(id: "pad.\(index).synth.fine",
+                          displayName: "PAD \(padNumber): SYNTH — Fine",
+                          range: -100...100,
+                          getBase: { synth.fine },
+                          setEffective: { synth.fine = $0 }),
+                LFOTarget(id: "pad.\(index).synth.morph",
+                          displayName: "PAD \(padNumber): SYNTH — Morph",
+                          range: 0...1,
+                          getBase: { synth.morph },
+                          setEffective: { synth.morph = $0 }),
+                LFOTarget(id: "pad.\(index).synth.spread",
+                          displayName: "PAD \(padNumber): SYNTH — Spread",
+                          range: 1...5,
+                          getBase: { synth.spread },
+                          setEffective: { synth.spread = $0 }),
+                LFOTarget(id: "pad.\(index).synth.fold",
+                          displayName: "PAD \(padNumber): SYNTH — Fold",
+                          range: 0...1,
+                          getBase: { synth.fold },
+                          setEffective: { synth.fold = $0 }),
+                LFOTarget(id: "pad.\(index).adsr.attack",
+                          displayName: "PAD \(padNumber): ADSR — Attack",
+                          range: 0.001...2.0,
+                          getBase: { adsr.attack },
+                          setEffective: { adsr.attack = $0 }),
+                LFOTarget(id: "pad.\(index).adsr.decay",
+                          displayName: "PAD \(padNumber): ADSR — Decay",
+                          range: 0.001...2.0,
+                          getBase: { adsr.decay },
+                          setEffective: { adsr.decay = $0 }),
+                LFOTarget(id: "pad.\(index).adsr.sustain",
+                          displayName: "PAD \(padNumber): ADSR — Sustain",
+                          range: 0...1,
+                          getBase: { adsr.sustain },
+                          setEffective: { adsr.sustain = $0 }),
+                LFOTarget(id: "pad.\(index).adsr.release",
+                          displayName: "PAD \(padNumber): ADSR — Release",
+                          range: 0.001...3.0,
+                          getBase: { adsr.release },
+                          setEffective: { adsr.release = $0 }),
+            ]
+        }
         return targets
     }
 
