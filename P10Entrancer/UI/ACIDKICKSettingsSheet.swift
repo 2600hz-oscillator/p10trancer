@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Per-EIGHTOH-pad sheet: 4 tracks × 16 steps + per-track voice
+/// Per-ACIDKICK-pad sheet: 4 tracks × 16 steps + per-track voice
 /// picker. Tap a step to toggle it; tap the voice chip on a track
 /// to cycle through Kick / Snare / Hat / Tom.
-struct EIGHTOHSettingsSheet: View {
-    @ObservedObject var source: EIGHTOHSource
+struct ACIDKICKSettingsSheet: View {
+    @ObservedObject var source: ACIDKICKSource
     @ObservedObject var sequencer: DrumSequencer
     @Environment(\.dismiss) private var dismiss
 
-    init(source: EIGHTOHSource) {
+    init(source: ACIDKICKSource) {
         self.source = source
         self.sequencer = source.sequencer
     }
@@ -35,7 +35,7 @@ struct EIGHTOHSettingsSheet: View {
 
     private var header: some View {
         HStack {
-            Text("EIGHTOH — 4×16 DRUMS")
+            Text("ACIDKICK — 4×16 DRUMS")
                 .font(.system(size: 14, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white).tracking(2.0)
             Spacer()
@@ -46,18 +46,84 @@ struct EIGHTOHSettingsSheet: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
+    @State private var voiceParamTick = UUID()  // bumps when sliders move so the
+                                                  // non-@Published voice props re-read
+
     private func trackRow(_ trackIdx: Int) -> some View {
         let track = sequencer.tracks[trackIdx]
-        return HStack(spacing: 6) {
-            voiceChip(trackIdx: trackIdx, type: track.voiceType)
-                .frame(width: 90)
-            HStack(spacing: 3) {
-                ForEach(0..<DrumSequencer.stepCount, id: \.self) { stepIdx in
-                    stepButton(trackIdx: trackIdx, stepIdx: stepIdx)
+        return VStack(spacing: 4) {
+            HStack(spacing: 6) {
+                voiceChip(trackIdx: trackIdx, type: track.voiceType)
+                    .frame(width: 90)
+                HStack(spacing: 3) {
+                    ForEach(0..<DrumSequencer.stepCount, id: \.self) { stepIdx in
+                        stepButton(trackIdx: trackIdx, stepIdx: stepIdx)
+                    }
                 }
             }
+            .frame(height: 40)
+            voiceControlsRow(trackIdx: trackIdx)
+                .id(voiceParamTick)
         }
-        .frame(height: 40)
+    }
+
+    /// Three compact sliders per track: pitch / decay / bitcrush.
+    /// Voice instances aren't ObservableObjects (they're touched
+    /// from the audio thread) so we drive re-renders via a UUID
+    /// tick — slider writes bump it and the row re-reads on the
+    /// next frame.
+    private func voiceControlsRow(trackIdx: Int) -> some View {
+        guard source.voices.indices.contains(trackIdx) else {
+            return AnyView(EmptyView())
+        }
+        let voice = source.voices[trackIdx]
+        return AnyView(
+            HStack(spacing: 10) {
+                Spacer().frame(width: 90)  // align under the steps row
+                voiceParamSlider(label: "PITCH",
+                                 value: voiceBinding(\.pitchMul, voice: voice),
+                                 range: 0.25...4.0,
+                                 format: "%.2fx")
+                voiceParamSlider(label: "DECAY",
+                                 value: voiceBinding(\.decayMul, voice: voice),
+                                 range: 0.1...4.0,
+                                 format: "%.2fx")
+                voiceParamSlider(label: "CRUSH",
+                                 value: voiceBinding(\.bitcrush, voice: voice),
+                                 range: 0...1.0,
+                                 format: "%.2f")
+            }
+            .frame(height: 32)
+        )
+    }
+
+    private func voiceParamSlider(label: String,
+                                   value: Binding<Float>,
+                                   range: ClosedRange<Float>,
+                                   format: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.65))
+                Spacer()
+                Text(String(format: format, value.wrappedValue))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Slider(value: value, in: range).tint(.cyan)
+        }
+    }
+
+    private func voiceBinding(_ keyPath: ReferenceWritableKeyPath<DrumVoice, Float>,
+                              voice: DrumVoice) -> Binding<Float> {
+        Binding(
+            get: { voice[keyPath: keyPath] },
+            set: {
+                voice[keyPath: keyPath] = $0
+                voiceParamTick = UUID()
+            }
+        )
     }
 
     private func voiceChip(trackIdx: Int, type: DrumVoiceType) -> some View {

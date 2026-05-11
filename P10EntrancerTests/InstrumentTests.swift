@@ -242,7 +242,7 @@ final class InstrumentTests: XCTestCase {
         }
     }
 
-    // MARK: - EIGHTOH
+    // MARK: - ACIDKICK
 
     func test_kick_voice_emits_energy_after_trigger() {
         let kick = KickVoice()

@@ -6,14 +6,14 @@ import AVFoundation
 import CoreGraphics
 import CoreText
 
-/// EIGHTOH — a 4-track × 16-step drum sequencer pad. Each track is
+/// ACIDKICK — a 4-track × 16-step drum sequencer pad. Each track is
 /// assigned one of the four 808-style voices (kick/snare/hat/tom)
 /// and contributes its samples to a stereo mix that flows through
 /// the pad's standard audio strip. Video output is an acidwarp-
 /// style glitch field with a rainbow waveform overlay; a comic-book
 /// POW! caption flashes when a kick fires.
 @MainActor
-final class EIGHTOHSource: PadSource, ObservableObject {
+final class ACIDKICKSource: PadSource, ObservableObject {
     private(set) var currentTexture: MTLTexture?
     let displayAspect: Float = 16.0 / 9.0
 
@@ -29,7 +29,7 @@ final class EIGHTOHSource: PadSource, ObservableObject {
     private(set) var voices: [DrumVoice]
 
     let audioPlayer: PadAudioPlayer
-    let renderer: EIGHTOHRenderer
+    let renderer: ACIDKICKRenderer
 
     // Visualization state
     private let context: MetalContext
@@ -60,15 +60,15 @@ final class EIGHTOHSource: PadSource, ObservableObject {
         self.currentTexture = context.device.makeTexture(descriptor: descriptor)
         self.pixelBuffer = [UInt32](repeating: 0xFF000000,
                                     count: textureWidth * textureHeight)
-        self.powBitmap = EIGHTOHSource.renderPOWBitmap()
+        self.powBitmap = ACIDKICKSource.renderPOWBitmap()
         let initialVoices: [DrumVoice] = [
             KickVoice(), SnareVoice(), HatVoice(), TomVoice()
         ]
         self.voices = initialVoices
-        let renderer = EIGHTOHRenderer(voices: initialVoices)
+        let renderer = ACIDKICKRenderer(voices: initialVoices)
         self.renderer = renderer
         self.audioPlayer = PadAudioPlayer(source: .drumMachine(renderer),
-                                           label: "eightoh")
+                                           label: "acidkick")
 
         sequencer.onStepTrigger = { [weak self] firingTracks in
             guard let self else { return }
@@ -355,12 +355,12 @@ final class EIGHTOHSource: PadSource, ObservableObject {
 }
 
 /// Stereo render bridge between PadAudioPlayer's AVAudioSourceNode
-/// and the EIGHTOH voices. Each render block clears the L/R
+/// and the ACIDKICK voices. Each render block clears the L/R
 /// buffers, then asks every voice to renderAdd in turn. Also
 /// captures the last frame of mono-mixed samples for the
 /// visualizer's waveform overlay (lock-free single writer / single
 /// reader via an atomic index).
-final class EIGHTOHRenderer: PadStereoRenderer, @unchecked Sendable {
+final class ACIDKICKRenderer: PadStereoRenderer, @unchecked Sendable {
     private var voices: [DrumVoice]
     /// Ring buffer of recent mono samples for the visualizer. 1024
     /// samples ≈ 20 ms @ 48k — enough to trace a clear shape across

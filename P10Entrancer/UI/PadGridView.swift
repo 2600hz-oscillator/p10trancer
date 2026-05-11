@@ -12,7 +12,7 @@ struct PadGridView: View {
     /// pads. Kept here rather than per-cell so the sheet can survive
     /// pad-source changes without disappearing mid-edit.
     @State private var instrumentSheetPadIndex: Int? = nil
-    @State private var eightohSheetPadIndex: Int? = nil
+    @State private var acidkickSheetPadIndex: Int? = nil
 
     var body: some View {
         ZStack {
@@ -59,11 +59,11 @@ struct PadGridView: View {
             }
         }
         .sheet(item: Binding(
-            get: { eightohSheetPadIndex.map { InstrumentSheetTarget(id: $0) } },
-            set: { eightohSheetPadIndex = $0?.id }
+            get: { acidkickSheetPadIndex.map { InstrumentSheetTarget(id: $0) } },
+            set: { acidkickSheetPadIndex = $0?.id }
         )) { target in
-            if let drums = pads.pads[target.id].source as? EIGHTOHSource {
-                EIGHTOHSettingsSheet(source: drums)
+            if let drums = pads.pads[target.id].source as? ACIDKICKSource {
+                ACIDKICKSettingsSheet(source: drums)
             }
         }
     }
@@ -109,15 +109,15 @@ struct PadGridView: View {
                         VideoPadOverlays(video: video)
                     }
                     // Upper-left gear: instrument settings — wavetable
-                    // (WAVECEL) or drum sequencer (EIGHTOH). Only
+                    // (WAVECEL) or drum sequencer (ACIDKICK). Only
                     // appears for instrument-kind sources.
                     if pads.pads[index].source is InstrumentSource
-                       || pads.pads[index].source is EIGHTOHSource {
+                       || pads.pads[index].source is ACIDKICKSource {
                         VStack {
                             HStack {
                                 Button {
-                                    if pads.pads[index].source is EIGHTOHSource {
-                                        eightohSheetPadIndex = index
+                                    if pads.pads[index].source is ACIDKICKSource {
+                                        acidkickSheetPadIndex = index
                                     } else {
                                         instrumentSheetPadIndex = index
                                     }
@@ -196,9 +196,9 @@ struct PadGridView: View {
                     Label("Instrument: Wavetable", systemImage: "pianokeys")
                 }
                 Button {
-                    AppState.shared.setEIGHTOHSource(at: index)
+                    AppState.shared.setACIDKICKSource(at: index)
                 } label: {
-                    Label("Instrument: EIGHTOH", systemImage: "metronome")
+                    Label("Instrument: ACIDKICK", systemImage: "metronome")
                 }
                 Button {
                     AppState.shared.reloadVideoSource(at: index)

@@ -34,7 +34,7 @@ struct PadFooterControls: View {
                 Spacer()
             }
             .sheet(isPresented: $lfoSheet) {
-                if pad.source is InstrumentSource || pad.source is EIGHTOHSource {
+                if pad.source is InstrumentSource || pad.source is ACIDKICKSource {
                     // Instrument-kind pads ship with three LFOs (the
                     // sheet handles tabs across them).
                     MultiLFOSheet(padIndex: padIndex,
@@ -95,8 +95,8 @@ struct PadFooterControls: View {
             VideoPlayStopIcon(video: video, padIndex: padIndex)
         } else if let inst = pad.source as? InstrumentSource {
             InstrumentPlayStopIcon(instrument: inst, padIndex: padIndex)
-        } else if let drums = pad.source as? EIGHTOHSource {
-            EIGHTOHPlayStopIcon(source: drums, padIndex: padIndex)
+        } else if let drums = pad.source as? ACIDKICKSource {
+            ACIDKICKPlayStopIcon(source: drums, padIndex: padIndex)
         } else {
             Image(systemName: "play.fill")
                 .font(.system(size: 14, weight: .bold))
@@ -146,16 +146,16 @@ private struct VideoPlayStopIcon: View {
     }
 }
 
-/// Play/stop the EIGHTOH drum sequencer loop.
-private struct EIGHTOHPlayStopIcon: View {
-    @ObservedObject var source: EIGHTOHSource
+/// Play/stop the ACIDKICK drum sequencer loop.
+private struct ACIDKICKPlayStopIcon: View {
+    @ObservedObject var source: ACIDKICKSource
     let padIndex: Int
 
     var body: some View {
         let icon = source.isPlaying ? "pause.fill" : "play.fill"
         Button {
             source.isPlaying.toggle()
-            P10Logger.log("[PadFooter] pad \(padIndex + 1) EIGHTOH play=\(source.isPlaying)")
+            P10Logger.log("[PadFooter] pad \(padIndex + 1) ACIDKICK play=\(source.isPlaying)")
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .bold))

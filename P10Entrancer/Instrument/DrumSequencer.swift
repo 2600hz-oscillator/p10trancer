@@ -25,7 +25,7 @@ final class DrumSequencer: ObservableObject {
     @Published private(set) var currentStep: Int = 0
 
     /// Called at every step boundary with the array of track indices
-    /// whose step at currentStep is enabled. EIGHTOHSource uses this
+    /// whose step at currentStep is enabled. ACIDKICKSource uses this
     /// to trigger the right voices.
     var onStepTrigger: (([Int]) -> Void)?
 

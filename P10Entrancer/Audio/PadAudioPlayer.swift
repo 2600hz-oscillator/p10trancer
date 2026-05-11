@@ -27,8 +27,8 @@ final class PadAudioPlayer: ObservableObject {
         /// stereo sample buffers. Used by InstrumentSource for the
         /// WAVECEL wavetable synth + ADSR path.
         case synth(WaveCelSynthRenderer)
-        /// EIGHTOH drum-machine stereo renderer.
-        case drumMachine(EIGHTOHRenderer)
+        /// ACIDKICK drum-machine stereo renderer.
+        case drumMachine(ACIDKICKRenderer)
     }
 
     private let engine: AVAudioEngine
@@ -270,7 +270,7 @@ final class PadAudioPlayer: ObservableObject {
 
     /// Attach a stereo AVAudioSourceNode whose render block delegates
     /// to any conforming PadStereoRenderer. Both the WAVECEL
-    /// wavetable synth and the EIGHTOH drum machine plug in here so
+    /// wavetable synth and the ACIDKICK drum machine plug in here so
     /// they share the per-pad mixerNode (volume / mute / VU tap).
     private func loadStereoRenderer(_ renderer: PadStereoRenderer) {
         let outFmt = engine.outputNode.outputFormat(forBus: 0)
