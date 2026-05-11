@@ -95,21 +95,37 @@ struct VideoPadOverlays: View {
         let w = geo.size.width
         let trackW = w * 0.6
         let track = SPEED_TRACK_HEIGHT
-        // Speed normalized 0..1 → exponential mapping to 0.1..4 so
-        // 1.0 (centered-ish) is in the middle of the slider travel.
+        // Bipolar slider: left edge = -2× (reverse 2×), center = +1×
+        // (normal forward, the "default" the user lands on), right
+        // edge = +2×. Note this is asymmetric in speed range: left
+        // half covers -2..+1, right half covers +1..+2. Linear
+        // mapping on each half — the range is small enough that an
+        // exponential curve isn't needed.
         let normalized = speedToNormalized(video.playbackRate)
         return ZStack(alignment: .leading) {
             Rectangle()
                 .fill(.black.opacity(0.55))
                 .frame(width: trackW, height: track)
-            // Tick at 1× (neutral)
+            // Tick at center (1× neutral) — emphasized, taller.
             Rectangle()
-                .fill(.white.opacity(0.4))
-                .frame(width: 1, height: track + 4)
+                .fill(.white.opacity(0.55))
+                .frame(width: 1, height: track + 6)
                 .offset(x: trackW * 0.5 - 0.5)
-            // Played indicator (white dot)
+            // Tick at 0 (paused) — sits at n = 1/3 since the left
+            // half spans -2..+1.
             Rectangle()
-                .fill(.white)
+                .fill(.white.opacity(0.35))
+                .frame(width: 1, height: track + 2)
+                .offset(x: trackW * (1.0/3.0) - 0.5)
+            // Tick at -1× — sits at n = 1/6.
+            Rectangle()
+                .fill(.white.opacity(0.3))
+                .frame(width: 1, height: track + 2)
+                .offset(x: trackW * (1.0/6.0) - 0.5)
+            // Played indicator (white bar). Orange when running
+            // reverse so direction is obvious at a glance.
+            Rectangle()
+                .fill(video.playbackRate < 0 ? Color.orange : Color.white)
                 .frame(width: 8, height: track)
                 .offset(x: CGFloat(normalized) * trackW - 4)
             HStack {
@@ -133,27 +149,33 @@ struct VideoPadOverlays: View {
         )
     }
 
-    /// Speed slider's "normalized to slider x" mapping. We make 1×
-    /// land at the middle of the slider; 0.1×..1× on the left half,
-    /// 1×..4× on the right half — exponential so each side has
-    /// roughly equal pixels per perceptual step.
+    /// Speed slider's "speed → slider position" mapping. Center
+    /// (n=0.5) is the user's default of +1× forward. Left half maps
+    /// linearly to the -2×..+1× range; right half maps linearly to
+    /// +1×..+2×. Asymmetric on purpose so the "useful" reverse range
+    /// gets most of the slider travel and the normal-speed default
+    /// sits dead center.
     private func speedToNormalized(_ speed: Float) -> Float {
-        if speed <= 1 {
-            // 0.1 → 0, 1 → 0.5
-            let t = (log(speed) - log(0.1)) / (log(1.0) - log(0.1))
-            return Float(t) * 0.5
+        let s = max(-2, min(2, speed))
+        if s >= 1 {
+            // 1..2 → 0.5..1
+            return 0.5 + (s - 1) * 0.5
         }
-        let t = (log(speed) - log(1.0)) / (log(4.0) - log(1.0))
-        return 0.5 + Float(t) * 0.5
+        // -2..1 → 0..0.5
+        return (s + 2) / 6
     }
 
     private func normalizedToSpeed(_ n: Float) -> Float {
-        if n <= 0.5 {
-            let t = Double(n / 0.5)
-            return Float(exp(log(0.1) + t * (log(1.0) - log(0.1))))
+        // ±0.03 dead zone around center snaps to +1× — makes it
+        // easy to return the slider to the default speed without
+        // hairline-precision dragging.
+        if abs(n - 0.5) < 0.03 { return 1.0 }
+        if n > 0.5 {
+            // 0.5..1 → 1..2
+            return 1.0 + (n - 0.5) * 2
         }
-        let t = Double((n - 0.5) / 0.5)
-        return Float(exp(log(1.0) + t * (log(4.0) - log(1.0))))
+        // 0..0.5 → -2..1
+        return -2.0 + n * 6
     }
 
     // MARK: - Trim brackets
