@@ -224,15 +224,20 @@ private struct LFOWaveformPreview: View {
                     if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
                 }
                 ctx.stroke(path, with: .color(.cyan), lineWidth: 2)
-                // Playhead at current phase if transport running.
+                // Animated dot riding the waveform at the LFO's current
+                // phase (only while transport is running + LFO enabled).
                 if transport.isRunning, lfo.enabled {
-                    let playheadPhase = lfo.phase.truncatingRemainder(dividingBy: 1) / cycles
-                    let xpos = playheadPhase * w
-                    ctx.stroke(
-                        Path { p in p.move(to: CGPoint(x: xpos, y: 0)); p.addLine(to: CGPoint(x: xpos, y: h)) },
-                        with: .color(.white.opacity(0.5)),
-                        lineWidth: 1
-                    )
+                    let displayPhase = lfo.phase.truncatingRemainder(dividingBy: 1) / cycles
+                    let xpos = displayPhase * w
+                    let s = Double(lfoSample(phase: lfo.phase, morph: lfo.morph))
+                    let ypos = midY - s * (h / 2 - 4)
+                    let radius: CGFloat = 5
+                    let rect = CGRect(x: xpos - radius, y: ypos - radius,
+                                       width: radius * 2, height: radius * 2)
+                    ctx.fill(Path(ellipseIn: rect), with: .color(.white))
+                    ctx.stroke(Path(ellipseIn: rect),
+                                with: .color(.cyan),
+                                lineWidth: 1.5)
                 }
                 _ = context.date // keep TimelineView animating
             }

@@ -59,7 +59,7 @@ struct ContentView: View {
                 // Reclaims the previously-empty letterbox space on
                 // either side of the centered 4:3 grid.
                 HStack(spacing: 0) {
-                    if sideStripW > 60 {
+                    if sideStripW > 40 {
                         MacroSideStrip(
                             macroSlotID: LFOTargets.slotID(forMacroIndex: 0),
                             macroTitle: "MACRO 1",
@@ -88,7 +88,7 @@ struct ContentView: View {
                         )
                         .frame(width: gridW, height: outputRowH)
                     }
-                    if sideStripW > 60 {
+                    if sideStripW > 40 {
                         MacroSideStrip(
                             macroSlotID: LFOTargets.slotID(forMacroIndex: 1),
                             macroTitle: "MACRO 2",

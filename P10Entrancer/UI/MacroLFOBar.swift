@@ -130,13 +130,14 @@ private struct MacroLFOPreview: View {
                 }
                 ctx.stroke(path, with: .color(.cyan), lineWidth: 1.5)
                 if transport.isRunning, lfo.enabled {
-                    let playheadPhase = lfo.phase.truncatingRemainder(dividingBy: 1) / cycles
-                    let xpos = playheadPhase * w
-                    ctx.stroke(
-                        Path { p in p.move(to: CGPoint(x: xpos, y: 0)); p.addLine(to: CGPoint(x: xpos, y: h)) },
-                        with: .color(.white.opacity(0.4)),
-                        lineWidth: 1
-                    )
+                    let displayPhase = lfo.phase.truncatingRemainder(dividingBy: 1) / cycles
+                    let xpos = displayPhase * w
+                    let s = Double(lfoSample(phase: lfo.phase, morph: lfo.morph))
+                    let ypos = midY - s * (h / 2 - 2)
+                    let radius: CGFloat = 3.5
+                    let rect = CGRect(x: xpos - radius, y: ypos - radius,
+                                       width: radius * 2, height: radius * 2)
+                    ctx.fill(Path(ellipseIn: rect), with: .color(.white))
                 }
                 _ = context.date
             }
