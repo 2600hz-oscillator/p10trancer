@@ -22,6 +22,13 @@ struct BottomControlBar: View {
     @State private var endSessionAlertShown = false
     @State private var showSaveBeforeEndAlert = false
     @State private var endSessionSaveDraft: String = ""
+    /// Save Session alert state. `saveDraft` survives across opens
+    /// so re-saving an existing session is one tap.
+    @State private var saveAlertShown = false
+    @State private var saveDraft: String = ""
+    /// Load Session picker state. Uses .confirmationDialog so a
+    /// scrollable list of saved names fits cleanly (alerts can't).
+    @State private var loadDialogShown = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -77,6 +84,29 @@ struct BottomControlBar: View {
                 onEndSession()
             }
         }
+        .alert("Save Session", isPresented: $saveAlertShown) {
+            TextField("Session name", text: $saveDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                let trimmed = saveDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    _ = AppState.shared.saveCurrentSession(as: trimmed)
+                }
+            }
+        } message: {
+            Text("Saves pads, sources, FX params, channel routing, NTSC settings — everything except play state and live LFO phase.")
+        }
+        .confirmationDialog("Load Session",
+                            isPresented: $loadDialogShown,
+                            titleVisibility: .visible) {
+            ForEach(sessions.savedNames, id: \.self) { name in
+                Button(name) {
+                    AppState.shared.loadSession(named: name)
+                    saveDraft = name
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     private var primaryRow: some View {
@@ -128,6 +158,8 @@ struct BottomControlBar: View {
             automationButton
             inspectButton
             sessionButton
+            saveSessionButton
+            loadSessionButton
             verticalDivider
             endSessionButton
             Spacer(minLength: 8)
@@ -159,6 +191,43 @@ struct BottomControlBar: View {
                 .overlay(Rectangle().strokeBorder(Color.red, lineWidth: 1))
         }
         .buttonStyle(.plain)
+    }
+
+    /// Direct "save current state" button. Opens an alert with a
+    /// text field, pre-filled with the last name the user saved
+    /// or loaded so re-saving an existing session is one tap.
+    private var saveSessionButton: some View {
+        Button(action: {
+            if saveDraft.isEmpty,
+               let prefilled = sessions.savedNames.last,
+               prefilled != SessionStore.factoryName {
+                saveDraft = prefilled
+            }
+            saveAlertShown = true
+        }) {
+            Text("SAVE")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.green, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Direct "load saved state" button. Opens a confirmation dialog
+    /// listing every saved session by name. Tapping a name applies
+    /// it via SessionCapture.
+    private var loadSessionButton: some View {
+        Button(action: { loadDialogShown = true }) {
+            Text("LOAD")
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12).padding(.vertical, 4)
+                .overlay(Rectangle().strokeBorder(Color.cyan, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(sessions.savedNames.isEmpty)
+        .opacity(sessions.savedNames.isEmpty ? 0.4 : 1)
     }
 
     private var channelBlock: some View {

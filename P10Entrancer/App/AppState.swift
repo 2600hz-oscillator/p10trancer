@@ -181,6 +181,10 @@ final class AppState: ObservableObject {
         // the engine to 0.
         mixer.masterVolume = 0
         AudioEngine.shared.masterVolume = 0
+        // Per-pad mute belt-and-braces: even with master volume at 0,
+        // pads start with their mute flag flipped so when the user
+        // raises master they don't blast everything at once.
+        muteAllPads()
     }
 
     /// On launch, after factory bundled clips are loaded, replay the user's
@@ -261,7 +265,19 @@ final class AppState: ObservableObject {
         guard let spec = sessions.load(name) else { return }
         SessionCapture.apply(spec, to: self)
         sessions.hasUnsavedChanges = false
+        muteAllPads()
         P10Logger.log("[AppState] loaded session '\(name)'")
+    }
+
+    /// Mute every pad's audio player via the per-pad mute toggle.
+    /// Used after session load + app launch so audio never blasts
+    /// without the user explicitly un-muting. Mixer levels (per-pad
+    /// volume sliders) are NOT touched — the user's mix stays put;
+    /// they just have to tap mute to bring each pad in.
+    func muteAllPads() {
+        for pad in pads.pads {
+            pad.audioPlayer?.isMuted = true
+        }
     }
 
     /// Keep AudioEngine.mainMixerNode.outputVolume synced with
