@@ -122,6 +122,50 @@ enum LFOTargets {
         ]
     }
 
+    // MARK: - Per XYZ unit
+
+    static func forXYZ(index: Int, state: XYZState) -> [LFOTarget] {
+        let label = "XYZ \(index + 1)"
+        return [
+            LFOTarget(id: "xyz.\(index).xShape",
+                      displayName: "\(label): X Shape", range: 0...1,
+                      getBase: { state.xShape }, setEffective: { state.xShape = $0 }),
+            LFOTarget(id: "xyz.\(index).yShape",
+                      displayName: "\(label): Y Shape", range: 0...1,
+                      getBase: { state.yShape }, setEffective: { state.yShape = $0 }),
+            LFOTarget(id: "xyz.\(index).xDisp",
+                      displayName: "\(label): X Disp", range: -1...1,
+                      getBase: { state.xDisp }, setEffective: { state.xDisp = $0 }),
+            LFOTarget(id: "xyz.\(index).yDisp",
+                      displayName: "\(label): Y Disp", range: -1...1,
+                      getBase: { state.yDisp }, setEffective: { state.yDisp = $0 }),
+            LFOTarget(id: "xyz.\(index).intensity",
+                      displayName: "\(label): Intensity", range: 0...2,
+                      getBase: { state.intensity }, setEffective: { state.intensity = $0 }),
+            LFOTarget(id: "xyz.\(index).tintR",
+                      displayName: "\(label): Tint R", range: 0...1,
+                      getBase: { state.tintR }, setEffective: { state.tintR = $0 }),
+            LFOTarget(id: "xyz.\(index).tintG",
+                      displayName: "\(label): Tint G", range: 0...1,
+                      getBase: { state.tintG }, setEffective: { state.tintG = $0 }),
+            LFOTarget(id: "xyz.\(index).tintB",
+                      displayName: "\(label): Tint B", range: 0...1,
+                      getBase: { state.tintB }, setEffective: { state.tintB = $0 }),
+            LFOTarget(id: "xyz.\(index).xFreq",
+                      displayName: "\(label): X Freq", range: 0.25...8,
+                      getBase: { state.xFreq }, setEffective: { state.xFreq = $0 }),
+            LFOTarget(id: "xyz.\(index).yFreq",
+                      displayName: "\(label): Y Freq", range: 0.25...8,
+                      getBase: { state.yFreq }, setEffective: { state.yFreq = $0 }),
+            LFOTarget(id: "xyz.\(index).xPhase",
+                      displayName: "\(label): X Phase", range: 0...1,
+                      getBase: { state.xPhase }, setEffective: { state.xPhase = $0 }),
+            LFOTarget(id: "xyz.\(index).yPhase",
+                      displayName: "\(label): Y Phase", range: 0...1,
+                      getBase: { state.yPhase }, setEffective: { state.yPhase = $0 })
+        ]
+    }
+
     // MARK: - Global (macro-only targets)
 
     /// Targets that are NOT scoped to a specific pad/keyer/feedback —
@@ -144,5 +188,6 @@ enum LFOTargets {
     static func slotID(forPadIndex i: Int) -> String { "pad-\(i)" }
     static func slotID(forKeyerIndex i: Int) -> String { "keyer-\(i)" }
     static let feedbackSlotID = "feedback"
+    static func slotID(forXYZIndex i: Int) -> String { "xyz-\(i)" }
     static func slotID(forMacroIndex i: Int) -> String { "macro-\(i)" }
 }

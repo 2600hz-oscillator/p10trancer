@@ -1,60 +1,31 @@
 import SwiftUI
 import MetalKit
 
-/// Row of three "output pads" — KEYER 1, KEYER 2, FEEDBACK — sitting
-/// directly under the 3×3 source-pad grid. Each pad shows the unit's
-/// rendered output, can be tapped to route that output to the active
-/// channel, and exposes a gear icon (lower left) that opens a setup
-/// sheet for inputs + parameters.
+/// Row of three FX pads — the bottom row of the 4×3 grid. Each cell
+/// is driven by an `FXPadSlot` whose `kind` (keyer/feedback/xyz)
+/// determines which renderer + settings sheet to show. The user can
+/// retype a slot from its gear menu — first a "Change type" picker
+/// is offered alongside the open-settings button.
 struct OutputPadsRowView: View {
     let keyerSystem: KeyerSystem
     let feedbackSystem: FeedbackSystem
+    let xyzSystem: XYZSystem
+    @ObservedObject var fxPadSystem: FXPadSystem
     @ObservedObject var mixer: MixerState
     let renderers: OutputPadRenderers
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(OutputPadRef.all, id: \.self) { ref in
+            ForEach(fxPadSystem.slots) { slot in
                 OutputPadCell(
-                    ref: ref,
+                    slot: slot,
                     mixer: mixer,
                     keyerSystem: keyerSystem,
                     feedbackSystem: feedbackSystem,
+                    xyzSystem: xyzSystem,
                     renderers: renderers
                 )
             }
-        }
-    }
-}
-
-/// References one of the three output pads. We keep this separate from
-/// ChannelSource because ChannelSource lacks a single FEEDBACK case
-/// (it uses an Int index from the old 2-feedback-unit days).
-enum OutputPadRef: Hashable {
-    case keyer(Int)   // 0 = Keyer 1, 1 = Keyer 2
-    case feedback     // single feedback unit
-
-    static let all: [OutputPadRef] = [.keyer(0), .keyer(1), .feedback]
-
-    var label: String {
-        switch self {
-        case .keyer(let i): return "KEYER \(i + 1)"
-        case .feedback: return "FEEDBACK"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .keyer: return .green
-        case .feedback: return .purple
-        }
-    }
-
-    /// Maps to the corresponding ChannelSource for routing to channels.
-    var channelSource: ChannelSource {
-        switch self {
-        case .keyer(let i): return .keyer(i)
-        case .feedback: return .feedback(0)
         }
     }
 }
@@ -65,29 +36,39 @@ enum OutputPadRef: Hashable {
 struct OutputPadRenderers {
     let keyerRenderers: [KeyerRenderer]
     let feedbackRenderers: [FeedbackRenderer]
+    let xyzRenderers: [XYZRenderer]
 }
 
 private struct OutputPadCell: View {
-    let ref: OutputPadRef
+    @ObservedObject var slot: FXPadSlot
     @ObservedObject var mixer: MixerState
     let keyerSystem: KeyerSystem
     let feedbackSystem: FeedbackSystem
+    let xyzSystem: XYZSystem
     let renderers: OutputPadRenderers
 
     @State private var settingsPresented = false
 
     var body: some View {
-        let isCh1 = mixer.ch1Source == ref.channelSource
-        let isCh2 = mixer.ch2Source == ref.channelSource
-        let routedColor: Color = isCh1 ? .cyan : (isCh2 ? .orange : ref.tint.opacity(0.5))
+        let kind = slot.kind
+        let isCh1 = mixer.ch1Source == kind.channelSource
+        let isCh2 = mixer.ch2Source == kind.channelSource
+        let baseTint: Color = {
+            switch kind {
+            case .keyer: return .green
+            case .feedback: return .purple
+            case .xyz: return .pink
+            }
+        }()
+        let routedColor: Color = isCh1 ? .cyan : (isCh2 ? .orange : baseTint.opacity(0.5))
 
         ZStack(alignment: .topLeading) {
-            preview
+            preview(kind: kind)
             Rectangle()
                 .strokeBorder(routedColor, lineWidth: (isCh1 || isCh2) ? 4 : 1)
             VStack {
                 HStack(alignment: .top) {
-                    Text(ref.label)
+                    Text(kind.displayLabel)
                         .font(.system(size: 11, weight: .heavy, design: .monospaced))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
@@ -112,8 +93,14 @@ private struct OutputPadCell: View {
                 }
                 Spacer()
                 HStack {
-                    Button {
-                        settingsPresented = true
+                    Menu {
+                        Button("Open setup…") { settingsPresented = true }
+                        Divider()
+                        Section("Change to") {
+                            ForEach(typePickerOptions, id: \.self) { option in
+                                Button(option.displayLabel) { slot.kind = option }
+                            }
+                        }
                     } label: {
                         Image(systemName: "gearshape.fill")
                             .font(.system(size: 14, weight: .bold))
@@ -122,7 +109,6 @@ private struct OutputPadCell: View {
                             .background(.black.opacity(0.6))
                             .clipShape(Circle())
                     }
-                    .buttonStyle(.plain)
                     .padding(6)
                     Spacer()
                 }
@@ -131,26 +117,43 @@ private struct OutputPadCell: View {
         .contentShape(Rectangle())
         .onTapGesture {
             switch mixer.activeChannel {
-            case .ch1: mixer.ch1Source = ref.channelSource
-            case .ch2: mixer.ch2Source = ref.channelSource
+            case .ch1: mixer.ch1Source = kind.channelSource
+            case .ch2: mixer.ch2Source = kind.channelSource
             }
         }
         .sheet(isPresented: $settingsPresented) {
-            outputPadSettings
+            outputPadSettings(for: kind)
         }
     }
 
+    /// Every option offered in the "Change to" menu. Includes all
+    /// instances of all three FX types so the user can swap a slot to
+    /// e.g. XYZ 2 or Keyer 1 directly.
+    private var typePickerOptions: [FXPadKind] {
+        var opts: [FXPadKind] = []
+        for i in keyerSystem.keyers.indices { opts.append(.keyer(i)) }
+        for i in feedbackSystem.units.indices { opts.append(.feedback(i)) }
+        for i in xyzSystem.units.indices { opts.append(.xyz(i)) }
+        return opts
+    }
+
     @ViewBuilder
-    private var preview: some View {
-        switch ref {
+    private func preview(kind: FXPadKind) -> some View {
+        switch kind {
         case .keyer(let i):
             if let r = renderers.keyerRenderers[safe: i] {
                 OutputTexturePreview(texture: { r.outputTexture })
             } else {
                 Color.black
             }
-        case .feedback:
-            if let r = renderers.feedbackRenderers.first {
+        case .feedback(let i):
+            if let r = renderers.feedbackRenderers[safe: i] {
+                OutputTexturePreview(texture: { r.outputTexture })
+            } else {
+                Color.black
+            }
+        case .xyz(let i):
+            if let r = renderers.xyzRenderers[safe: i] {
                 OutputTexturePreview(texture: { r.outputTexture })
             } else {
                 Color.black
@@ -159,15 +162,19 @@ private struct OutputPadCell: View {
     }
 
     @ViewBuilder
-    private var outputPadSettings: some View {
-        switch ref {
+    private func outputPadSettings(for kind: FXPadKind) -> some View {
+        switch kind {
         case .keyer(let i):
             if let state = keyerSystem.keyer(at: i) {
                 KeyerSettingsSheet(keyer: state, keyerIndex: i)
             }
-        case .feedback:
-            if let state = feedbackSystem.unit(at: 0) {
+        case .feedback(let i):
+            if let state = feedbackSystem.unit(at: i) {
                 FeedbackSettingsSheet(state: state)
+            }
+        case .xyz(let i):
+            if let state = xyzSystem.unit(at: i) {
+                XYZSettingsSheet(state: state, xyzIndex: i)
             }
         }
     }

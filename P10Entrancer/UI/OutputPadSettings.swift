@@ -9,12 +9,20 @@ struct SourcePicker: View {
     let label: String
     @Binding var source: SourceRef
     /// When non-nil, this keyer's index is excluded from the picker
-    /// (a keyer can't pick itself as input). Pass nil for feedback
-    /// (which never picks itself either).
+    /// (a keyer can't pick itself as input). Pass nil for feedback /
+    /// xyz (which use their own exclusion fields).
     let editingKeyerIndex: Int?
+    /// When non-nil, this XYZ unit's index is excluded.
+    var editingXYZIndex: Int? = nil
     /// When false, hide the FEEDBACK option (e.g., editing the
     /// feedback unit itself).
     let allowFeedback: Bool
+    /// When false, hide XYZ chips (no slot edits its own input from
+    /// another XYZ — kept as a flexibility lever).
+    var allowXYZ: Bool = true
+    /// Number of XYZ units to expose chips for. Defaults to 3 to
+    /// match `XYZSystem.units.count`.
+    var xyzCount: Int = 3
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -39,6 +47,15 @@ struct SourcePicker: View {
                     if allowFeedback {
                         chip(label: "FB", on: source == .feedback, tint: .purple) {
                             source = .feedback
+                        }
+                    }
+                    if allowXYZ {
+                        ForEach(0..<xyzCount, id: \.self) { i in
+                            if editingXYZIndex != i {
+                                chip(label: "X\(i + 1)", on: source == .xyz(i), tint: .pink) {
+                                    source = .xyz(i)
+                                }
+                            }
                         }
                     }
                 }

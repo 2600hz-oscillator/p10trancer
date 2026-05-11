@@ -9,7 +9,8 @@ enum ActiveChannel: Int {
 enum ChannelSource: Equatable {
     case pad(Int)
     case keyer(Int)    // 0 = Keyer 1, 1 = Keyer 2
-    case feedback(Int) // 0 = FB 1, 1 = FB 2
+    case feedback(Int) // 0 = FB 1 (only one unit today)
+    case xyz(Int)      // 0..2 = XYZ Rutt-Etra units
 }
 
 enum OutputMode: Int, CaseIterable, Identifiable {

@@ -10,6 +10,7 @@ final class MasterMixerOffscreen: FrameRenderer {
     private let mixer: MixerState
     private let keyers: [KeyerRenderer]
     private let feedbacks: [FeedbackRenderer]
+    private let xyzs: [XYZRenderer]
     private let ntscPipeline: NTSCPipeline
     private let pipeline: MTLRenderPipelineState
     weak var recorder: MixerRecorder?
@@ -17,11 +18,17 @@ final class MasterMixerOffscreen: FrameRenderer {
     private var lastSize: (Int, Int) = (0, 0)
     private var renderTexture: MTLTexture?
 
-    init(pads: PadSystem, mixer: MixerState, keyers: [KeyerRenderer], feedbacks: [FeedbackRenderer], ntscPipeline: NTSCPipeline) throws {
+    init(pads: PadSystem,
+         mixer: MixerState,
+         keyers: [KeyerRenderer],
+         feedbacks: [FeedbackRenderer],
+         xyzs: [XYZRenderer],
+         ntscPipeline: NTSCPipeline) throws {
         self.pads = pads
         self.mixer = mixer
         self.keyers = keyers
         self.feedbacks = feedbacks
+        self.xyzs = xyzs
         self.ntscPipeline = ntscPipeline
         self.pipeline = try context.makePipeline(
             vertex: "mixerVertex",
@@ -29,8 +36,9 @@ final class MasterMixerOffscreen: FrameRenderer {
             pixelFormat: .bgra8Unorm
         )
         // Wire the source resolvers AFTER all renderers exist so the
-        // graph can resolve cycles (keyer → keyer, feedback → keyer)
-        // by reading each unit's last-frame outputTexture.
+        // graph can resolve cycles (keyer → keyer, feedback → keyer,
+        // xyz → keyer, etc.) by reading each unit's last-frame
+        // outputTexture.
         let resolver: (SourceRef) -> MTLTexture? = { [weak self] ref in
             guard let self else { return nil }
             switch ref {
@@ -42,10 +50,14 @@ final class MasterMixerOffscreen: FrameRenderer {
                 return self.keyers[i].outputTexture
             case .feedback:
                 return self.feedbacks.first?.outputTexture
+            case .xyz(let i):
+                guard self.xyzs.indices.contains(i) else { return nil }
+                return self.xyzs[i].outputTexture
             }
         }
         for k in keyers { k.sourceResolver = resolver }
         for f in feedbacks { f.sourceResolver = resolver }
+        for x in xyzs { x.sourceResolver = resolver }
     }
 
     var currentOutputTexture: MTLTexture? {
@@ -62,6 +74,7 @@ final class MasterMixerOffscreen: FrameRenderer {
         // outputTexture pointer that's read on subsequent frames.
         for feedback in feedbacks { feedback.render() }
         for keyer in keyers { keyer.render() }
+        for xyz in xyzs { xyz.render() }
 
         let canvasSize = mixer.outputMode.canvasSize
         if (canvasSize.width, canvasSize.height) != lastSize {
@@ -121,6 +134,9 @@ final class MasterMixerOffscreen: FrameRenderer {
         case .feedback(let i):
             guard feedbacks.indices.contains(i) else { return nil }
             return feedbacks[i].outputTexture
+        case .xyz(let i):
+            guard xyzs.indices.contains(i) else { return nil }
+            return xyzs[i].outputTexture
         }
     }
 

@@ -35,8 +35,14 @@ final class PerformancePackageTests: XCTestCase {
     /// with all bundled pad videos copied in, exactly once (idempotent
     /// across calls so we don't blow away user-edited Factory).
     func test_bootstrap_factory_creates_package_with_videos() throws {
-        // Clear the bootstrap flag so we can exercise the path.
-        UserDefaults.standard.removeObject(forKey: "p10e.factoryBootstrapped")
+        // Clear every bootstrap flag we've used so far so the
+        // bootstrap path actually runs regardless of which version
+        // a prior test or app launch already set.
+        for key in ["p10e.factoryBootstrapped",
+                    "p10e.factoryBootstrapped.v2",
+                    "p10e.factoryBootstrapped.v3"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
         let store = PerformanceStore()
         store.delete("Factory") // ensure a clean start
         store.bootstrapFactoryIfNeeded()
@@ -53,6 +59,13 @@ final class PerformancePackageTests: XCTestCase {
     func test_export_writes_aar_file() throws {
         let appState = AppState.shared
         appState.startIfNeeded()
+        // Force bootstrap regardless of flag state from prior tests.
+        for key in ["p10e.factoryBootstrapped",
+                    "p10e.factoryBootstrapped.v2",
+                    "p10e.factoryBootstrapped.v3"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        appState.performances.delete("Factory")
         appState.performances.bootstrapFactoryIfNeeded()
         let source = appState.performances.packageURL(for: "Factory")
         let dest = FileManager.default.temporaryDirectory

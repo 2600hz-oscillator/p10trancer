@@ -127,7 +127,7 @@ final class PerformanceStore: ObservableObject {
     /// Bump this key's version suffix any time the bundled pad
     /// videos change so existing installs re-bootstrap Factory and
     /// pick up the new content. Older flag values are ignored.
-    private static let bootstrappedDefaultsKey = "p10e.factoryBootstrapped.v2"
+    private static let bootstrappedDefaultsKey = "p10e.factoryBootstrapped.v3"
 
     func bootstrapFactoryIfNeeded() {
         let defaults = UserDefaults.standard

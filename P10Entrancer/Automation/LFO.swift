@@ -172,6 +172,9 @@ final class LFOEngine: ObservableObject {
         } else if slotID.hasPrefix("keyer-"),
                   let i = Int(slotID.dropFirst("keyer-".count)) {
             prefix = "keyer.\(i)."
+        } else if slotID.hasPrefix("xyz-"),
+                  let i = Int(slotID.dropFirst("xyz-".count)) {
+            prefix = "xyz.\(i)."
         } else if slotID.hasPrefix("pad-"),
                   let i = Int(slotID.dropFirst("pad-".count)) {
             prefix = "pad.\(i)."

@@ -12,6 +12,9 @@ final class AppState {
     let keyerRenderers: [KeyerRenderer]
     let feedbackSystem = FeedbackSystem()
     let feedbackRenderers: [FeedbackRenderer]
+    let xyzSystem = XYZSystem()
+    let xyzRenderers: [XYZRenderer]
+    let fxPadSystem = FXPadSystem()
     let ntscState = NTSCState()
     let ntscPipeline: NTSCPipeline
     let masterMixerOffscreen: MasterMixerOffscreen
@@ -52,12 +55,16 @@ final class AppState {
         self.feedbackRenderers = feedbackSystem.units.map {
             try! FeedbackRenderer(pads: pads, state: $0)
         }
+        self.xyzRenderers = xyzSystem.units.map {
+            try! XYZRenderer(state: $0)
+        }
         self.ntscPipeline = try! NTSCPipeline(state: ntscState)
         self.masterMixerOffscreen = try! MasterMixerOffscreen(
             pads: pads,
             mixer: mixer,
             keyers: self.keyerRenderers,
             feedbacks: self.feedbackRenderers,
+            xyzs: self.xyzRenderers,
             ntscPipeline: self.ntscPipeline
         )
 
@@ -288,6 +295,11 @@ final class AppState {
         if let fb = feedbackSystem.unit(at: 0) {
             lfoEngine.registerTargets(LFOTargets.forFeedback(state: fb))
         }
+        // XYZ units: register targets for each, scoped via the
+        // `xyz.N.` id prefix.
+        for (i, x) in xyzSystem.units.enumerated() {
+            lfoEngine.registerTargets(LFOTargets.forXYZ(index: i, state: x))
+        }
         // Global / macro-only: mixer position. Only macros see this
         // (LFOEngine.availableTargets(forSlot:) filters per slot).
         lfoEngine.registerTargets(LFOTargets.forMixer(mixer))
@@ -340,6 +352,11 @@ final class AppState {
             case .feedback(let i):
                 if let fb = feedbackSystem.unit(at: i) {
                     routed.insert(fb.sourcePadIndex)
+                }
+            case .xyz(let i):
+                if let x = xyzSystem.unit(at: i),
+                   case .pad(let p) = x.inputSource {
+                    routed.insert(p)
                 }
             }
         }

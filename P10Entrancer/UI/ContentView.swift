@@ -80,10 +80,13 @@ struct ContentView: View {
                         OutputPadsRowView(
                             keyerSystem: appState.keyerSystem,
                             feedbackSystem: appState.feedbackSystem,
+                            xyzSystem: appState.xyzSystem,
+                            fxPadSystem: appState.fxPadSystem,
                             mixer: appState.mixer,
                             renderers: OutputPadRenderers(
                                 keyerRenderers: appState.keyerRenderers,
-                                feedbackRenderers: appState.feedbackRenderers
+                                feedbackRenderers: appState.feedbackRenderers,
+                                xyzRenderers: appState.xyzRenderers
                             )
                         )
                         .frame(width: gridW, height: outputRowH)

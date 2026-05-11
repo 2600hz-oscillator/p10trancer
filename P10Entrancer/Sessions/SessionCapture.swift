@@ -206,6 +206,7 @@ enum SessionCapture {
         case .pad(let i):       return .init(kind: .pad, index: i)
         case .keyer(let i):     return .init(kind: .keyer, index: i)
         case .feedback(let i):  return .init(kind: .feedback, index: i)
+        case .xyz(let i):       return .init(kind: .xyz, index: i)
         }
     }
 
@@ -214,6 +215,7 @@ enum SessionCapture {
         case .pad:      return .pad(source.index)
         case .keyer:    return .keyer(source.index)
         case .feedback: return .feedback(source.index)
+        case .xyz:      return .xyz(source.index)
         }
     }
 

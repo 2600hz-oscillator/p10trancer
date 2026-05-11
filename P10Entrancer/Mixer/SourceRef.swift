@@ -12,12 +12,14 @@ enum SourceRef: Equatable, Codable {
     case pad(Int)        // 0..<PadSystem.padCount
     case keyer(Int)      // 0 (Keyer 1) or 1 (Keyer 2)
     case feedback        // single feedback unit (post-MVP refactor)
+    case xyz(Int)        // 0..2 = XYZ Rutt-Etra units
 
     var displayLabel: String {
         switch self {
         case .pad(let i): return "PAD \(i + 1)"
         case .keyer(let i): return "KEYER \(i + 1)"
         case .feedback: return "FEEDBACK"
+        case .xyz(let i): return "XYZ \(i + 1)"
         }
     }
 }
