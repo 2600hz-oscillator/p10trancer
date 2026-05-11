@@ -22,13 +22,11 @@ final class VideoFileSource: PadSource, ObservableObject {
     }
 
     /// Playback rate as a multiplier of normal speed. 1.0 = normal,
-    /// 0.5 = half, 2.0 = double, -1.0 = reverse at normal speed.
-    /// Range -4..+4 enforced by the UI slider, with 0 = paused.
-    /// AVPlayer only honors negative rates for assets whose
-    /// canPlayReverse / canPlaySlowReverse / canPlayFastReverse are
-    /// true (essentially all local MP4 files). Audio playback rate
-    /// isn't matched — the audio loops at its native rate while
-    /// only video honors speed changes.
+    /// 0.5 = half, 2.0 = double. Range 0.1..4 enforced by the UI
+    /// slider — always forward (reverse playback was tried but the
+    /// AVPlayer behavior was too unreliable across the bundled
+    /// pads). Audio playback rate isn't matched; only video honors
+    /// speed changes.
     @Published var playbackRate: Float = 1.0 {
         didSet { applyRate() }
     }
@@ -170,15 +168,10 @@ final class VideoFileSource: PadSource, ObservableObject {
     }
 
     private func applyRate() {
-        // Rate may be negative for reverse. The UI's "paused dead
-        // zone" sends 0 through; we treat any |rate| < 0.02 as a
-        // pause to avoid sub-percept playback that looks frozen but
-        // still consumes the decode loop.
-        if !isPlaying || abs(playbackRate) < 0.02 {
-            player.rate = 0
-            return
-        }
-        player.rate = playbackRate
+        // Always forward; the slider enforces 0.1..4 and `isPlaying
+        // = false` zeroes the rate.
+        let r = max(0.05, playbackRate)
+        player.rate = isPlaying ? r : 0
     }
 
     private func advancePosition(currentTime: CMTime) {
@@ -187,18 +180,11 @@ final class VideoFileSource: PadSource, ObservableObject {
         let nowSec = CMTimeGetSeconds(currentTime)
         let normalized = nowSec / durSec
         position = normalized
-        // Trim-loop: behavior depends on direction.
-        //   Forward: hit trimEnd → wrap back to trimStart.
-        //   Reverse: hit trimStart → wrap forward to trimEnd.
-        // Without an explicit reverse-wrap, AVPlayer would freeze at
-        // time 0 once the playhead crossed trimStart, exactly the
-        // "stops playing entirely" symptom reported when the user
-        // dragged the speed slider into reverse.
-        if player.rate > 0, normalized >= trimEnd - 0.0005 {
+        // Trim-loop: once we hit (or surpass) trimEnd, jump back to
+        // trimStart. Also handles running off the natural clip end
+        // by looping to trimStart so the user always sees motion.
+        if normalized >= trimEnd - 0.0005 {
             seek(toNormalized: trimStart)
-            applyRate()
-        } else if player.rate < 0, normalized <= trimStart + 0.0005 {
-            seek(toNormalized: max(trimStart, trimEnd - 0.0005))
             applyRate()
         }
     }
