@@ -16,15 +16,7 @@ struct LFOSettingsSheet: View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    enableRow
-                    shapeRow
-                    rateRow
-                    assignSection
-                }
-                .padding(20)
-            }
+            LFOEditor(lfo: lfo, targets: availableTargets, transport: transport)
         }
         .background(.black)
         .preferredColorScheme(.dark)
@@ -41,6 +33,28 @@ struct LFOSettingsSheet: View {
                 .foregroundStyle(.white)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+}
+
+/// Reusable LFO editor body — enable / shape / rate / 3 assignment
+/// slots. Extracted from LFOSettingsSheet so it can be embedded in
+/// the multi-LFO tab UI used by instrument pads.
+struct LFOEditor: View {
+    @ObservedObject var lfo: LFOState
+    let targets: [LFOTarget]
+    let transport: Transport
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                enableRow
+                shapeRow
+                rateRow
+                assignSection
+            }
+            .padding(20)
+        }
     }
 
     private var enableRow: some View {
@@ -127,7 +141,7 @@ struct LFOSettingsSheet: View {
                         get: { lfo.assignments[i] },
                         set: { lfo.assignments[i] = $0 }
                     ),
-                    targets: availableTargets
+                    targets: targets
                 )
             }
         }

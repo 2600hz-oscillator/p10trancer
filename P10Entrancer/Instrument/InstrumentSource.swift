@@ -18,8 +18,12 @@ final class InstrumentSource: PadSource, ObservableObject {
 
     let synth: WaveCelSynth
     let adsr: ADSREnvelope
-    /// Stereo reverb applied after synth + ADSR. Lives on the
-    /// instrument because the reverb tail is part of the patch
+    /// Wasp-style state-variable filter (LP/HP/BP, cutoff, res) sits
+    /// between the ADSR and the reverb. Tanh-saturated feedback gives
+    /// it the Doepfer A-124 character at high resonance.
+    let filter: WaspFilter
+    /// Stereo reverb applied after synth + ADSR + filter. Lives on
+    /// the instrument because the reverb tail is part of the patch
     /// sound, not a master-bus effect.
     let reverb: SimpleReverb
     @Published var sequencer = StepSequencer()
@@ -40,6 +44,14 @@ final class InstrumentSource: PadSource, ObservableObject {
     /// User-visible label of the currently-loaded wavetable. Set when
     /// a new table is loaded; the UI reads this to label the picker.
     @Published var wavetableLabel: String = "DEFAULT"
+    /// Visualizer 3D-space params. `vizZoom` scales the whole stack
+    /// around the texture center, `vizRotation` rotates it (in
+    /// turns, 0..1 → 0..360°), `vizColorCycle` drives a time-based
+    /// HSV hue rotation across non-active frames. 0 keeps the
+    /// classic orange-fading look; > 0 ramps up rainbow speed.
+    @Published var vizZoom: Float = 1.0
+    @Published var vizRotation: Float = 0
+    @Published var vizColorCycle: Float = 0
 
     let audioPlayer: PadAudioPlayer
 
@@ -49,6 +61,11 @@ final class InstrumentSource: PadSource, ObservableObject {
     private var pixelBuffer: [UInt32]
     private let textureWidth = 320
     private let textureHeight = 180
+    /// Wall-clock-driven phase used by the visualizer's color cycle
+    /// so a non-zero `vizColorCycle` runs even when the transport is
+    /// stopped. Computed inside renderWavetableVisualization from
+    /// the host CFTimeInterval to avoid a separate timer.
+    private var vizStartTime: CFTimeInterval = CACurrentMediaTime()
 
     init(transport: Transport, context: MetalContext = .shared) {
         self.context = context
@@ -61,8 +78,10 @@ final class InstrumentSource: PadSource, ObservableObject {
         // clock — but matching the rate keeps the size knob honest.
         let engineSR = AudioEngine.shared.engine.outputNode.outputFormat(forBus: 0).sampleRate
         let reverb = SimpleReverb(sampleRate: engineSR > 0 ? engineSR : 48000)
+        let filter = WaspFilter()
         self.synth = synth
         self.adsr = adsr
+        self.filter = filter
         self.reverb = reverb
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm,
@@ -74,7 +93,8 @@ final class InstrumentSource: PadSource, ObservableObject {
         self.currentTexture = context.device.makeTexture(descriptor: descriptor)
         self.pixelBuffer = [UInt32](repeating: 0xFF101010,
                                     count: textureWidth * textureHeight)
-        let renderer = WaveCelSynthRenderer(synth: synth, adsr: adsr, reverb: reverb)
+        let renderer = WaveCelSynthRenderer(synth: synth, adsr: adsr,
+                                            filter: filter, reverb: reverb)
         self.audioPlayer = PadAudioPlayer(source: .synth(renderer),
                                            label: "instrument")
         sequencer.onStepTrigger = { [weak self] step in
@@ -136,9 +156,10 @@ final class InstrumentSource: PadSource, ObservableObject {
     /// Animated wavetable visualization — a port of WAVECEL's
     /// wave3D card view. Frames are stacked back-to-front in
     /// pseudo-perspective; the active frame (selected by `morph`)
-    /// is drawn in white, the rest in orange that fades toward the
-    /// back. Animates as morph changes (knob, LFO, or otherwise) —
-    /// the highlight slides across the stack.
+    /// is drawn in white, the rest in orange (or rainbow-cycling
+    /// per `vizColorCycle`) fading toward the back. Zoom + rotation
+    /// apply a 2D affine transform around the texture center;
+    /// rotation is in turns (0..1 → 0..360°).
     private func renderWavetableVisualization() {
         guard let texture = currentTexture else { return }
         let w = textureWidth
@@ -153,9 +174,6 @@ final class InstrumentSource: PadSource, ObservableObject {
             return
         }
 
-        // Subsample frames + samples so the per-tick cost stays
-        // bounded for large tables (256-frame WAVs would otherwise
-        // rasterize ~65k line segments / frame).
         let maxFramesDrawn = 24
         let frameStride = max(1, fc / maxFramesDrawn)
         let drawnFrameCount = (fc + frameStride - 1) / frameStride
@@ -169,9 +187,23 @@ final class InstrumentSource: PadSource, ObservableObject {
         let totalDepth = Float(drawH) * 0.7
         let yBack = Float(margin) + Float(drawH) * 0.05
 
-        // Highlight frame from current morph; clamped to drawn range.
         let activeFrame = Int(round(Double(synth.morph) * Double(fc - 1)))
         let activeDrawIndex = activeFrame / frameStride
+
+        // 2D affine snapshot used by the polyline routine.
+        let cx = Float(w) * 0.5
+        let cy = Float(h) * 0.5
+        let zoom = max(0.1, min(4, vizZoom))
+        let rotTurns = vizRotation - floor(vizRotation)
+        let rotAngle = rotTurns * 2 * .pi
+        let cosA = cos(rotAngle)
+        let sinA = sin(rotAngle)
+
+        // Hue offset for color cycling. `colorCycle = 0` → no
+        // animation; > 0 → rainbow rotation faster as it grows.
+        let cycle = max(0, min(1, vizColorCycle))
+        let elapsed = CACurrentMediaTime() - vizStartTime
+        let hueRotation = Float(elapsed) * cycle * 0.3  // 0.3 turns/s at max
 
         snapshot.samples.withUnsafeBufferPointer { samples in
             for di in 0..<drawnFrameCount {
@@ -186,9 +218,13 @@ final class InstrumentSource: PadSource, ObservableObject {
                 let isActive = di == activeDrawIndex
                 if isActive {
                     color = 0xFFFFFFFF
+                } else if cycle > 0.001 {
+                    // Rainbow stripes — each frame gets its own
+                    // hue offset, the whole wheel rotates over time.
+                    let hueFrac = Float(di) / Float(max(1, drawnFrameCount)) + hueRotation
+                    let alpha = 0.25 + 0.7 * t
+                    color = packHSV(hueFrac: hueFrac, alpha: alpha)
                 } else {
-                    // Orange that gets brighter (closer to front)
-                    // toward larger t.
                     let alpha = 0.25 + 0.7 * t
                     color = pack(r: 255, g: 150, b: 40, a: alpha)
                 }
@@ -199,10 +235,34 @@ final class InstrumentSource: PadSource, ObservableObject {
                                   sliceH: sliceH,
                                   sampleStride: sampleStride,
                                   samples: samples.baseAddress!,
+                                  cx: cx, cy: cy,
+                                  zoom: zoom, cosA: cosA, sinA: sinA,
                                   color: color)
             }
         }
         uploadTexture(texture)
+    }
+
+    /// HSV→RGB with full saturation and fixed value. Pre-multiplies
+    /// alpha against the BG so the visualizer reads correctly at
+    /// dim alphas.
+    private func packHSV(hueFrac: Float, alpha: Float) -> UInt32 {
+        let h = (hueFrac - floor(hueFrac)) * 6  // 0..6
+        let i = Int(h)
+        let f = h - Float(i)
+        let v: Float = 1
+        let q = v * (1 - f)
+        let qt = v * f
+        var r: Float = 0, g: Float = 0, b: Float = 0
+        switch i % 6 {
+        case 0: r = v;  g = qt; b = 0
+        case 1: r = q;  g = v;  b = 0
+        case 2: r = 0;  g = v;  b = qt
+        case 3: r = 0;  g = q;  b = v
+        case 4: r = qt; g = 0;  b = v
+        default: r = v; g = 0;  b = q
+        }
+        return pack(r: Int(r * 255), g: Int(g * 255), b: Int(b * 255), a: alpha)
     }
 
     /// Pseudo-alpha by blending toward the background. The pad
@@ -223,6 +283,8 @@ final class InstrumentSource: PadSource, ObservableObject {
                                    sliceH: Float,
                                    sampleStride: Int,
                                    samples: UnsafePointer<Float>,
+                                   cx: Float, cy: Float,
+                                   zoom: Float, cosA: Float, sinA: Float,
                                    color: UInt32) {
         let frameOffset = frame * WaveCelSynth.frameSize
         var prevX: Int = -1
@@ -232,8 +294,18 @@ final class InstrumentSource: PadSource, ObservableObject {
             let sample = samples[frameOffset + s]
             let xf = xLeft + (Float(s) / Float(WaveCelSynth.frameSize - 1)) * frameW
             let yf = frameY - sample * sliceH
-            let x = Int(xf.rounded())
-            let y = Int(yf.rounded())
+            // Apply zoom + rotation around the texture center. This
+            // moves the whole wave stack in 2D screen space; combined
+            // with the existing perspective stacking it reads as a
+            // 3D camera tilt + zoom.
+            let dx = xf - cx
+            let dy = yf - cy
+            let rx = dx * cosA - dy * sinA
+            let ry = dx * sinA + dy * cosA
+            let tx = cx + rx * zoom
+            let ty = cy + ry * zoom
+            let x = Int(tx.rounded())
+            let y = Int(ty.rounded())
             if prevX >= 0 {
                 drawLine(x0: prevX, y0: prevY, x1: x, y1: y, color: color)
             }
@@ -297,11 +369,14 @@ final class InstrumentSource: PadSource, ObservableObject {
 final class WaveCelSynthRenderer: @unchecked Sendable {
     private let synth: WaveCelSynth
     private let adsr: ADSREnvelope
+    private let filter: WaspFilter
     private let reverb: SimpleReverb
 
-    init(synth: WaveCelSynth, adsr: ADSREnvelope, reverb: SimpleReverb) {
+    init(synth: WaveCelSynth, adsr: ADSREnvelope,
+         filter: WaspFilter, reverb: SimpleReverb) {
         self.synth = synth
         self.adsr = adsr
+        self.filter = filter
         self.reverb = reverb
     }
 
@@ -332,9 +407,10 @@ final class WaveCelSynthRenderer: @unchecked Sendable {
                 right[i] *= scratch[i]
             }
         }
-        // Reverb sits at the tail of the chain — runs in-place on
-        // the post-ADSR stereo signal so the tail rings out after
-        // the envelope releases.
+        // Filter runs after envelope so the cutoff feels responsive
+        // to the dynamics; reverb sits at the tail so it tails out
+        // through the filter's color.
+        filter.process(left: left, right: right, count: count, sampleRate: sampleRate)
         reverb.process(left: left, right: right, count: count)
     }
 

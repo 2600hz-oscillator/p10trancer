@@ -43,7 +43,9 @@ struct InstrumentSettingsSheet: View {
                     stepGridSection
                     keyboardSection
                     adsrSection
+                    filterSection
                     reverbSection
+                    visualizerSection
                 }
                 .padding(20)
             }
@@ -364,6 +366,80 @@ struct InstrumentSettingsSheet: View {
                            range: 0...1)
                 adsrSlider(label: "WET/DRY",
                            value: reverbBinding(\.wet),
+                           range: 0...1)
+            }
+        }
+    }
+
+    // MARK: - Filter (Wasp-style)
+
+    @State private var filterModeTick = UUID()  // re-render when mode changes
+
+    private var filterSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("FILTER")
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                // Segmented LP/HP/BP picker.
+                HStack(spacing: 0) {
+                    filterModeButton(label: "LP", mode: .lowpass)
+                    filterModeButton(label: "BP", mode: .bandpass)
+                    filterModeButton(label: "HP", mode: .highpass)
+                }
+                .id(filterModeTick)
+            }
+            HStack(spacing: 12) {
+                adsrSlider(label: "CUTOFF",
+                           value: filterBinding(\.cutoffHz),
+                           range: 20...18000)
+                adsrSlider(label: "RES",
+                           value: filterBinding(\.resonance),
+                           range: 0...1)
+            }
+        }
+    }
+
+    private func filterModeButton(label: String, mode: WaspFilter.Mode) -> some View {
+        let selected = instrument.filter.mode == mode
+        return Button {
+            instrument.filter.mode = mode
+            filterModeTick = UUID()
+        } label: {
+            Text(label)
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .foregroundStyle(selected ? .black : .white)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(selected ? Color.white : Color.white.opacity(0.06))
+                .overlay(Rectangle().strokeBorder(Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func filterBinding(_ keyPath: ReferenceWritableKeyPath<WaspFilter, Float>) -> Binding<Float> {
+        Binding(
+            get: { instrument.filter[keyPath: keyPath] },
+            set: { instrument.filter[keyPath: keyPath] = $0 }
+        )
+    }
+
+    // MARK: - Visualizer
+
+    private var visualizerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("VISUALIZER")
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.7))
+            HStack(spacing: 12) {
+                adsrSlider(label: "ZOOM",
+                           value: $instrument.vizZoom,
+                           range: 0.3...2.5)
+                adsrSlider(label: "ROTATE",
+                           value: $instrument.vizRotation,
+                           range: 0...1)
+                adsrSlider(label: "COLOR",
+                           value: $instrument.vizColorCycle,
                            range: 0...1)
             }
         }

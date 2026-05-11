@@ -34,13 +34,24 @@ struct PadFooterControls: View {
                 Spacer()
             }
             .sheet(isPresented: $lfoSheet) {
-                let slot = LFOTargets.slotID(forPadIndex: padIndex)
-                LFOSettingsSheet(
-                    title: "PAD \(padIndex + 1)",
-                    lfo: AppState.shared.lfoEngine.lfo(for: slot),
-                    availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: slot),
-                    transport: AppState.shared.transport
-                )
+                if pad.source is InstrumentSource {
+                    // Instrument pads ship with three LFOs (the
+                    // sheet handles tabs across them). Plenty of
+                    // params to sweep — synth, ADSR, filter, reverb,
+                    // visualizer.
+                    MultiLFOSheet(padIndex: padIndex,
+                                  lfoCount: 3,
+                                  engine: AppState.shared.lfoEngine,
+                                  transport: AppState.shared.transport)
+                } else {
+                    let slot = LFOTargets.slotID(forPadIndex: padIndex)
+                    LFOSettingsSheet(
+                        title: "PAD \(padIndex + 1)",
+                        lfo: AppState.shared.lfoEngine.lfo(for: slot),
+                        availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: slot),
+                        transport: AppState.shared.transport
+                    )
+                }
             }
             // VU meter on camera pads — confirms the mic is picking up
             // signal so the user knows whether their voice is being

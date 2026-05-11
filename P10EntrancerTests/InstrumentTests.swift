@@ -180,6 +180,53 @@ final class InstrumentTests: XCTestCase {
         XCTAssertTrue(hasEnergy, "reverb should keep ringing after a single impulse")
     }
 
+    // MARK: - Wasp filter
+
+    func test_filter_lowpass_attenuates_high_frequencies() {
+        // Run a square-wave-ish signal through a low-pass at very
+        // low cutoff; output peak-to-peak must drop noticeably.
+        let f = WaspFilter()
+        f.mode = .lowpass
+        f.cutoffHz = 100
+        f.resonance = 0.1
+        var l = [Float](repeating: 0, count: 4800)
+        var r = [Float](repeating: 0, count: 4800)
+        for i in 0..<l.count { let v: Float = i % 2 == 0 ? 1 : -1; l[i] = v; r[i] = v }
+        let origPP = (l.max() ?? 0) - (l.min() ?? 0)
+        l.withUnsafeMutableBufferPointer { lp in
+            r.withUnsafeMutableBufferPointer { rp in
+                f.process(left: lp.baseAddress!, right: rp.baseAddress!,
+                          count: 4800, sampleRate: 48000)
+            }
+        }
+        // After settling, the filtered tail must be smaller than input.
+        let tail = l.suffix(1000)
+        let pp = (tail.max() ?? 0) - (tail.min() ?? 0)
+        XCTAssertLessThan(pp, origPP * 0.5,
+            "LP at 100Hz should kill most of a ~24kHz square (orig p-p \(origPP), filtered \(pp))")
+    }
+
+    // MARK: - Multi-LFO pad routing
+
+    func test_pad_lfo2_and_lfo3_see_same_targets_as_lfo1() {
+        let transport = Transport()
+        let engine = LFOEngine(transport: transport)
+        engine.registerTargets([
+            LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "pad.0.synth.morph", displayName: "P1 morph", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "pad.1.volume", displayName: "P2 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+        ])
+        let lfo1Targets = Set(engine.availableTargets(forSlot: "pad-0").map(\.id))
+        let lfo2Targets = Set(engine.availableTargets(forSlot: "pad-0-lfo-1").map(\.id))
+        let lfo3Targets = Set(engine.availableTargets(forSlot: "pad-0-lfo-2").map(\.id))
+        XCTAssertEqual(lfo1Targets, lfo2Targets,
+                       "LFO 2 on pad-0 must see the same targets as LFO 1")
+        XCTAssertEqual(lfo1Targets, lfo3Targets,
+                       "LFO 3 on pad-0 must see the same targets as LFO 1")
+        XCTAssertFalse(lfo2Targets.contains("pad.1.volume"),
+                       "Pad LFOs must stay scoped to their own pad")
+    }
+
     // MARK: - E352 parser
 
     func test_bundled_voxsynth_parses_into_frames() throws {

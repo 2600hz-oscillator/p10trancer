@@ -109,6 +109,40 @@ enum LFOTargets {
                           getBase: { reverb.wet },
                           setEffective: { reverb.wet = $0 }),
             ]
+            // Filter (Wasp) params.
+            let filter = inst.filter
+            targets += [
+                LFOTarget(id: "pad.\(index).filter.cutoff",
+                          displayName: "PAD \(padNumber): FILTER — Cutoff",
+                          range: 20...18000,
+                          getBase: { filter.cutoffHz },
+                          setEffective: { filter.cutoffHz = $0 }),
+                LFOTarget(id: "pad.\(index).filter.resonance",
+                          displayName: "PAD \(padNumber): FILTER — Resonance",
+                          range: 0...1,
+                          getBase: { filter.resonance },
+                          setEffective: { filter.resonance = $0 }),
+            ]
+            // Visualizer params — these don't affect audio but they
+            // make great LFO targets for syncing on-screen motion to
+            // the music.
+            targets += [
+                LFOTarget(id: "pad.\(index).viz.zoom",
+                          displayName: "PAD \(padNumber): VIZ — Zoom",
+                          range: 0.3...2.5,
+                          getBase: { inst.vizZoom },
+                          setEffective: { inst.vizZoom = $0 }),
+                LFOTarget(id: "pad.\(index).viz.rotation",
+                          displayName: "PAD \(padNumber): VIZ — Rotate",
+                          range: 0...1,
+                          getBase: { inst.vizRotation },
+                          setEffective: { inst.vizRotation = $0 }),
+                LFOTarget(id: "pad.\(index).viz.colorCycle",
+                          displayName: "PAD \(padNumber): VIZ — Color Cycle",
+                          range: 0...1,
+                          getBase: { inst.vizColorCycle },
+                          setEffective: { inst.vizColorCycle = $0 }),
+            ]
         }
         return targets
     }
@@ -261,6 +295,13 @@ enum LFOTargets {
     /// Stable slot id used by LFOEngine to find/create the LFOState
     /// for each modulatable surface.
     static func slotID(forPadIndex i: Int) -> String { "pad-\(i)" }
+    /// Pad LFO N (1-indexed externally; 0 = primary). Instrument
+    /// pads expose three LFOs (0/1/2). Slot 0 keeps the bare
+    /// `pad-N` form for backward compat with anything that already
+    /// references it; slots 1+ get the `-lfo-K` suffix.
+    static func slotID(forPadIndex i: Int, lfoIndex k: Int) -> String {
+        k == 0 ? "pad-\(i)" : "pad-\(i)-lfo-\(k)"
+    }
     static func slotID(forKeyerIndex i: Int) -> String { "keyer-\(i)" }
     static let feedbackSlotID = "feedback"
     static func slotID(forXYZIndex i: Int) -> String { "xyz-\(i)" }

@@ -188,8 +188,16 @@ final class LFOEngine: ObservableObject {
         } else if slotID.hasPrefix("xyz-"),
                   let i = Int(slotID.dropFirst("xyz-".count)) {
             prefix = "xyz.\(i)."
-        } else if slotID.hasPrefix("pad-"),
-                  let i = Int(slotID.dropFirst("pad-".count)) {
+        } else if slotID.hasPrefix("pad-") {
+            // Pad slot IDs come in two shapes:
+            //   pad-N             — LFO 1 (legacy/default)
+            //   pad-N-lfo-K       — LFO K+1 on the same pad
+            // Both should resolve to the same `pad.N.*` target set
+            // so all three LFOs on an instrument pad can sweep the
+            // same params.
+            let suffix = String(slotID.dropFirst("pad-".count))
+            let idxToken = suffix.split(separator: "-").first.map(String.init) ?? suffix
+            guard let i = Int(idxToken) else { return [] }
             prefix = "pad.\(i)."
         } else {
             return []
