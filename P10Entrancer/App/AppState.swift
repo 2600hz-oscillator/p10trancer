@@ -385,20 +385,21 @@ final class AppState {
     }
 
     func applyAudioRouting() {
-        let routed = routedPadIndices()
-        // Aggregate mic gain across routed camera pads. Max-of-volumes so
-        // multiple cameras don't pile up onto the recording.
+        // Audio is no longer gated by channel routing. Every pad is
+        // permanently "routed" from the audio engine's perspective;
+        // the per-pad volume slider + per-pad mute + master volume
+        // are the only controls over audibility. CH1/CH2 selection
+        // continues to drive the VIDEO mix only — audio always plays
+        // and the recorder captures the full pad mix.
         var micGain: Float = 0
-        for (i, pad) in pads.pads.enumerated() {
-            let isRouted = routed.contains(i)
-            pad.audioPlayer?.setRouted(isRouted)
-            if isRouted, pad.source is CameraSource || pad.source is BuiltInCameraSource,
+        for pad in pads.pads {
+            pad.audioPlayer?.setRouted(true)
+            if pad.source is CameraSource || pad.source is BuiltInCameraSource,
                let v = pad.audioPlayer?.volume {
                 micGain = max(micGain, v)
             }
         }
         MicCapture.shared.recordGain = micGain
-        // If a recording is currently in progress, propagate the new gain.
         if recorder.isRecording {
             recorder.audioAppender.setMicMix(queue: MicCapture.shared.queue, gain: micGain)
         }

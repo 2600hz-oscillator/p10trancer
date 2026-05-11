@@ -17,7 +17,12 @@ vertex VOut gridVertex(uint vid [[vertex_id]]) {
 
 struct GridParams {
     float cellAspect;
-    float _pad0;
+    /// Fraction of each cell's width reserved on the LEFT for the
+    /// SwiftUI per-pad volume slider. The pad's video is rendered
+    /// in the remaining (1 - leftMargin) on the right; the slider
+    /// strip is filled with a dark BG so the SwiftUI slider drawn
+    /// on top reads cleanly. 0 = no margin (legacy full-cell).
+    float leftMargin;
     float _pad1;
     float _pad2;
 };
@@ -42,18 +47,29 @@ fragment half4 gridFragment(
     float2 inCell = fract(uv * 3.0);
     int idx = int(cell.y) * 3 + int(cell.x);
 
-    // Aspect-fit each pad's actual source aspect into its cell. Cameras after
-    // a portrait rotation arrive at ~9:16; bundled clips at 16:9; etc.
+    // Reserve a slim strip on the LEFT of every cell for the per-pad
+    // volume slider drawn by SwiftUI on top. Pad video only renders
+    // in the inCell.x range [leftMargin, 1.0].
+    float leftMargin = params.leftMargin;
+    if (inCell.x < leftMargin) {
+        return half4(0.04h, 0.04h, 0.06h, 1.0h);
+    }
+    // Remap the surviving (1 - leftMargin) horizontal strip back to
+    // [0, 1] for the aspect-fit math below.
+    float2 padInCell = float2((inCell.x - leftMargin) / max(0.0001, 1.0 - leftMargin),
+                              inCell.y);
+    float padCellAspect = params.cellAspect * (1.0 - leftMargin);
+
     float srcAspect = padAspects[idx];
     if (srcAspect <= 0.0) { srcAspect = 16.0 / 9.0; }
     float scaleX = 1.0;
     float scaleY = 1.0;
-    if (params.cellAspect > srcAspect) {
-        scaleX = params.cellAspect / srcAspect;
+    if (padCellAspect > srcAspect) {
+        scaleX = padCellAspect / srcAspect;
     } else {
-        scaleY = srcAspect / params.cellAspect;
+        scaleY = srcAspect / padCellAspect;
     }
-    float2 fitUV = (inCell - 0.5) * float2(scaleX, scaleY) + 0.5;
+    float2 fitUV = (padInCell - 0.5) * float2(scaleX, scaleY) + 0.5;
 
     half4 c;
     if (any(fitUV < float2(0.0)) || any(fitUV > float2(1.0))) {
@@ -72,7 +88,9 @@ fragment half4 gridFragment(
         }
     }
 
-    float2 d = abs(inCell - 0.5);
+    // Border darkens the edge of the pad-video sub-rect (not the
+    // full cell — the slider strip stays its own region).
+    float2 d = abs(padInCell - 0.5);
     float edgeDist = max(d.x, d.y);
     float border = smoothstep(0.485, 0.5, edgeDist);
     c.rgb = mix(c.rgb, half3(0.04h, 0.04h, 0.06h), half(border));

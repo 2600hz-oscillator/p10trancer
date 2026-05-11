@@ -46,7 +46,14 @@ final class GridRenderer: NSObject, FrameRenderer, MTKViewDelegate {
         let drawableW = Float(view.drawableSize.width)
         let drawableH = Float(view.drawableSize.height)
         let cellAspect: Float = (drawableW / 3.0) / max(drawableH / 3.0, 1)
-        var params = GridParamsBuffer(cellAspect: cellAspect, _pad0: 0, _pad1: 0, _pad2: 0)
+        // Left margin (fraction of cell width) reserved for the
+        // per-pad SwiftUI volume slider that sits to the left of
+        // each pad's video. Kept in one place so the shader and
+        // SwiftUI cellOverlay agree on the strip width.
+        let leftMargin: Float = PadGridLayout.sliderStripFraction
+        var params = GridParamsBuffer(cellAspect: cellAspect,
+                                      leftMargin: leftMargin,
+                                      _pad1: 0, _pad2: 0)
         var aspects: [Float] = pads.pads.map { $0.aspect }
         while aspects.count < 9 { aspects.append(16.0 / 9.0) }
 
@@ -66,7 +73,16 @@ final class GridRenderer: NSObject, FrameRenderer, MTKViewDelegate {
 
 private struct GridParamsBuffer {
     var cellAspect: Float
-    var _pad0: Float
+    var leftMargin: Float
     var _pad1: Float
     var _pad2: Float
+}
+
+/// Shared layout constants between GridRenderer (the Metal pad
+/// shader) and PadGridView (the SwiftUI overlay). Keep these in
+/// sync — the shader leaves `sliderStripFraction` of each cell's
+/// width empty on the left, and SwiftUI draws the volume slider
+/// inside that strip.
+enum PadGridLayout {
+    static let sliderStripFraction: Float = 0.16
 }

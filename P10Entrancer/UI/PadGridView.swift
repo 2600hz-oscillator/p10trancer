@@ -73,10 +73,45 @@ struct PadGridView: View {
         let isCh2 = mixer.ch2PadIndex == index
         let isInspected = mixer.inspectedPadIndex == index
         let assignmentMode = liveRecordings.selectedID != nil
+        // The Metal grid shader reserves the left `sliderStripFraction`
+        // of each cell for the per-pad volume slider. The remaining
+        // pad-video area lives to its right; all existing overlays
+        // (CH chips, gear icons, footer controls, VideoPadOverlays)
+        // stay anchored inside that right region by inset-padding the
+        // overlay ZStack.
+        let stripFrac = CGFloat(PadGridLayout.sliderStripFraction)
         return Color.clear
             .contentShape(Rectangle())
             .overlay(
-                ZStack(alignment: .topLeading) {
+                GeometryReader { geo in
+                    let stripW = geo.size.width * stripFrac
+                    HStack(spacing: 0) {
+                        PadVolumeSlider(pad: pads.pads[index])
+                            .frame(width: stripW)
+                        padCellOverlays(index: index,
+                                         isCh1: isCh1,
+                                         isCh2: isCh2,
+                                         isInspected: isInspected,
+                                         assignmentMode: assignmentMode)
+                    }
+                }
+            )
+            .onTapGesture {
+                if liveRecordings.loadIntoPad(index) { return }
+                mixer.routeActivePad(index)
+            }
+    }
+
+    /// All the per-pad UI that lives over the pad's VIDEO area (to
+    /// the right of the volume slider strip). Extracted so the
+    /// outer cellOverlay can sit it next to the volume slider in
+    /// an HStack.
+    @ViewBuilder
+    private func padCellOverlays(index: Int,
+                                  isCh1: Bool, isCh2: Bool,
+                                  isInspected: Bool,
+                                  assignmentMode: Bool) -> some View {
+        ZStack(alignment: .topLeading) {
                     if assignmentMode {
                         Rectangle()
                             .fill(Color.green.opacity(0.10))
@@ -137,81 +172,73 @@ struct PadGridView: View {
                             Spacer()
                         }
                     }
-                    PadFooterControls(pad: pads.pads[index], padIndex: index)
-                }
-            )
-            .onTapGesture {
-                if liveRecordings.loadIntoPad(index) { return }
-                mixer.routeActivePad(index)
+            PadFooterControls(pad: pads.pads[index], padIndex: index)
+        }
+        .contextMenu {
+            Button {
+                P10Logger.log("[PadGridView] Load Video tapped for pad \(index + 1)")
+                pendingPadIndex = index
+                importerVisible = true
+            } label: {
+                Label("Load Video…", systemImage: "folder")
             }
-            .contextMenu {
-                Button {
-                    P10Logger.log("[PadGridView] Load Video tapped for pad \(index + 1)")
-                    pendingPadIndex = index
-                    importerVisible = true
-                } label: {
-                    Label("Load Video…", systemImage: "folder")
-                }
-                Menu {
-                    if cameras.devices.isEmpty {
-                        Text("No cameras detected")
-                    } else {
-                        ForEach(cameras.devices) { device in
-                            Button {
-                                AppState.shared.setCameraSource(deviceID: device.id, at: index)
-                            } label: {
-                                Label(device.label, systemImage: cameraIcon(for: device.kind))
-                            }
+            Menu {
+                if cameras.devices.isEmpty {
+                    Text("No cameras detected")
+                } else {
+                    ForEach(cameras.devices) { device in
+                        Button {
+                            AppState.shared.setCameraSource(deviceID: device.id, at: index)
+                        } label: {
+                            Label(device.label, systemImage: cameraIcon(for: device.kind))
                         }
                     }
-                } label: {
-                    Label("Camera", systemImage: "camera")
                 }
-                // Keyer / feedback as pad sources removed: those now
-                // live as their own output pads in the row beneath the
-                // 3×3 grid. Cameras stay assignable.
-                Menu {
-                    ForEach(0..<PadSystem.padCount, id: \.self) { other in
-                        if other != index {
-                            Button {
-                                AppState.shared.setPadChainSource(
-                                    at: index, sourcePadIndex: other
-                                )
-                            } label: {
-                                Label("Pad \(other + 1)", systemImage: "rectangle.connected.to.line.below")
-                            }
+            } label: {
+                Label("Camera", systemImage: "camera")
+            }
+            Menu {
+                ForEach(0..<PadSystem.padCount, id: \.self) { other in
+                    if other != index {
+                        Button {
+                            AppState.shared.setPadChainSource(
+                                at: index, sourcePadIndex: other
+                            )
+                        } label: {
+                            Label("Pad \(other + 1)", systemImage: "rectangle.connected.to.line.below")
                         }
                     }
-                } label: {
-                    Label("Chain from another pad", systemImage: "link")
                 }
-                Button {
-                    AppState.shared.setMasterFeedbackSource(at: index)
-                } label: {
-                    Label("Master Feedback", systemImage: "arrow.triangle.2.circlepath")
-                }
-                Button {
-                    AppState.shared.setInstrumentSource(at: index)
-                } label: {
-                    Label("Instrument: Wavetable", systemImage: "pianokeys")
-                }
-                Button {
-                    AppState.shared.setACIDKICKSource(at: index)
-                } label: {
-                    Label("Instrument: ACIDKICK", systemImage: "metronome")
-                }
-                Button {
-                    AppState.shared.reloadVideoSource(at: index)
-                } label: {
-                    Label("Reset to Bundled", systemImage: "arrow.counterclockwise")
-                }
-                Divider()
-                Button {
-                    mixer.inspectedPadIndex = index
-                } label: {
-                    Label("Inspect FX", systemImage: "slider.horizontal.3")
-                }
+            } label: {
+                Label("Chain from another pad", systemImage: "link")
             }
+            Button {
+                AppState.shared.setMasterFeedbackSource(at: index)
+            } label: {
+                Label("Master Feedback", systemImage: "arrow.triangle.2.circlepath")
+            }
+            Button {
+                AppState.shared.setInstrumentSource(at: index)
+            } label: {
+                Label("Instrument: Wavetable", systemImage: "pianokeys")
+            }
+            Button {
+                AppState.shared.setACIDKICKSource(at: index)
+            } label: {
+                Label("Instrument: ACIDKICK", systemImage: "metronome")
+            }
+            Button {
+                AppState.shared.reloadVideoSource(at: index)
+            } label: {
+                Label("Reset to Bundled", systemImage: "arrow.counterclockwise")
+            }
+            Divider()
+            Button {
+                mixer.inspectedPadIndex = index
+            } label: {
+                Label("Inspect FX", systemImage: "slider.horizontal.3")
+            }
+        }
     }
 
     private func cameraIcon(for kind: CameraDevice.Kind) -> String {
