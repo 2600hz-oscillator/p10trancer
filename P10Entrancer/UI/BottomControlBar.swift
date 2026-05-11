@@ -387,6 +387,7 @@ private struct InspectorSheet: View {
     @ObservedObject var mixer: MixerState
     @ObservedObject var ntsc: NTSCState
     @ObservedObject var thermal: ThermalMonitor
+    @ObservedObject var appState: AppState = .shared
     @Environment(\.dismiss) private var dismiss
     @State private var showVideoImporter = false
 
@@ -403,6 +404,7 @@ private struct InspectorSheet: View {
                         .foregroundStyle(.white)
                 }
                 if mixer.outputMode == .ntsc4_3 { ntscSection }
+                performanceSection
                 fxSection
                 Spacer()
             }
@@ -423,6 +425,34 @@ private struct InspectorSheet: View {
             case .failure(let error):
                 P10Logger.log("[InspectorSheet] file import failed: \(error)")
             }
+        }
+    }
+
+    /// Per-pad preview thumbnail quality — cuts visualizer fps +
+    /// video preview copy rate at lower settings. Audio playback
+    /// and sequencer timing are unaffected; only the on-screen
+    /// pad previews scale back.
+    private var performanceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("THUMBNAIL QUALITY")
+            HStack(spacing: 0) {
+                ForEach(ThumbnailQuality.allCases) { q in
+                    let selected = appState.thumbnailQuality == q
+                    Button(action: { appState.thumbnailQuality = q }) {
+                        Text(q.label)
+                            .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 32)
+                            .foregroundStyle(selected ? .black : .white)
+                            .background(selected ? Color.white : Color.white.opacity(0.06))
+                            .overlay(Rectangle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text("Affects only the per-pad preview render rate. Doesn't change audio or sequencer timing.")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.5))
         }
     }
 

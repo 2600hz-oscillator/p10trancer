@@ -208,9 +208,7 @@ final class PadAudioPlayer: ObservableObject {
     }
 
     private func applyEffectiveVolume() {
-        let effective: Float = (isMuted || !isRouted) ? 0.0 : volume
-        mixerNode.outputVolume = effective
-        P10Logger.log("[PadAudioPlayer:\(label)] applyEffectiveVolume vol=\(volume) muted=\(isMuted) routed=\(isRouted) → out=\(effective)")
+        mixerNode.outputVolume = (isMuted || !isRouted) ? 0.0 : volume
     }
 
     // MARK: - Source-specific setup

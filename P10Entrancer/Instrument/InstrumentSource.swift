@@ -133,11 +133,12 @@ final class InstrumentSource: PadSource, ObservableObject {
     }
 
     func tick(timestamp: CFTimeInterval) {
-        // Throttle to ~30 fps — the line rasterizer pays per visible
-        // frame × samples-per-frame and competes with sequencer +
-        // transport tick processing on the main thread.
+        // Stride between redraws comes from AppState.thumbnailQuality
+        // so the user can dial down the visualizer cost without
+        // touching anything else.
         frameCounter &+= 1
-        if frameCounter & 1 == 0 { renderWavetableVisualization() }
+        let stride = AppState.shared.thumbnailQuality.visualizerStride
+        if frameCounter % stride == 0 { renderWavetableVisualization() }
     }
 
     func assignNote(stepIndex: Int, semitoneFromC: Int) {

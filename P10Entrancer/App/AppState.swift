@@ -3,8 +3,16 @@ import AVFoundation
 import Combine
 
 @MainActor
-final class AppState {
+final class AppState: ObservableObject {
     static let shared = AppState()
+
+    /// Render-quality knob for the per-pad preview thumbnails. Wired
+    /// up via the Inspector panel; users on older iPads / heavy
+    /// patches can drop to `.medium` or `.low` to keep transport
+    /// ticks firing on cadence. Doesn't affect audio playback,
+    /// sequencer timing, or the master output — only the on-screen
+    /// pad visualizers.
+    @Published var thumbnailQuality: ThumbnailQuality = .high
 
     let pads = PadSystem()
     let mixer = MixerState()

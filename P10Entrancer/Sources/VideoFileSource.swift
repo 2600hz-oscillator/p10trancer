@@ -135,8 +135,17 @@ final class VideoFileSource: PadSource, ObservableObject {
         }
     }
 
+    private var tickCounter: Int = 0
+
     func tick(timestamp: CFTimeInterval) {
         guard isPlaying else { return }
+        // Thumbnail-quality stride: `.low` skips every other pixel
+        // copy. The actual AVPlayer playback runs at its own rate
+        // (audio + video are not gated by this); we just refresh
+        // the on-screen preview texture less often.
+        tickCounter &+= 1
+        let stride = AppState.shared.thumbnailQuality.videoPixelBufferStride
+        if stride > 1 && tickCounter % stride != 0 { return }
         let itemTime = videoOutput.itemTime(forHostTime: CACurrentMediaTime())
         guard videoOutput.hasNewPixelBuffer(forItemTime: itemTime) else { return }
         if let pb = videoOutput.copyPixelBuffer(forItemTime: itemTime, itemTimeForDisplay: nil) {

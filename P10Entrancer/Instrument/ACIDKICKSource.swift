@@ -109,11 +109,12 @@ final class ACIDKICKSource: PadSource, ObservableObject {
     }
 
     func tick(timestamp: CFTimeInterval) {
-        // Throttle the visualizer to every other frame. The acidwarp
-        // bands cost ~5M trig ops/sec at full rate which competes
-        // with SwiftUI layout + transport tick processing on main.
+        // Stride between redraws comes from AppState.thumbnailQuality.
+        // ACIDKICK's per-cell sin/cos is the heaviest visualizer in
+        // the app, so it benefits the most from a higher stride.
         frameCounter &+= 1
-        if frameCounter & 1 == 0 { renderAcidwarp() }
+        let stride = AppState.shared.thumbnailQuality.visualizerStride
+        if frameCounter % stride == 0 { renderAcidwarp() }
     }
 
     /// Re-create voice objects whose type changed so the new sound
