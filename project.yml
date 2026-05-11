@@ -21,6 +21,11 @@ settings:
     SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
     CODE_SIGN_STYLE: Automatic
 
+packages:
+  ffmpeg-kit-spm:
+    url: https://github.com/tylerjonesio/ffmpeg-kit-spm
+    branch: min.v5.1.2.6
+
 targets:
   P10Entrancer:
     type: application
@@ -43,6 +48,11 @@ targets:
         Release:
           SWIFT_OPTIMIZATION_LEVEL: "-O"
           SWIFT_COMPILATION_MODE: wholemodule
+    dependencies:
+      - package: ffmpeg-kit-spm
+        product: FFmpeg-Kit
+        embed: true
+        codeSign: true
 
   P10EntrancerTests:
     type: bundle.unit-test

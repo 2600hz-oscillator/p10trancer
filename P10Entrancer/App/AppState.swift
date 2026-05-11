@@ -532,6 +532,11 @@ final class AppState: ObservableObject {
         let userDir = docs.appendingPathComponent("UserVideos", isDirectory: true)
         try? FileManager.default.createDirectory(at: userDir, withIntermediateDirectories: true)
 
+        // Security-scoped access on the originating Files.app URL has
+        // to bracket the copy itself. We do that synchronously here,
+        // then hand off any heavy transcode work to a Task — at that
+        // point we already own the file in our sandbox so the scope
+        // can be released.
         let needsScopedAccess = sourceURL.startAccessingSecurityScopedResource()
         defer { if needsScopedAccess { sourceURL.stopAccessingSecurityScopedResource() } }
         P10Logger.log("[AppState] scoped access: \(needsScopedAccess)")
@@ -549,7 +554,44 @@ final class AppState: ObservableObject {
             P10Logger.log("[AppState] copy user video failed: \(error)")
             return
         }
-        pads.setSource(VideoFileSource(url: dest), at: index)
-        P10Logger.log("[AppState] pad \(index + 1) source → user file \(fileName)")
+
+        // AVFoundation-native container → load synchronously, same
+        // path as before. Anything else (.mkv/.webm/.avi/…) is
+        // handed to the in-app transcoder.
+        if !TranscodeService.needsTranscoding(dest) {
+            pads.setSource(VideoFileSource(url: dest), at: index)
+            P10Logger.log("[AppState] pad \(index + 1) source → user file \(fileName)")
+            return
+        }
+
+        P10Logger.log("[AppState] pad \(index + 1): \(fileName) needs transcode → mp4")
+        // Co-locate the transcoded mp4 next to the original copy.
+        // We keep the basename but swap the extension so the user can
+        // tell which file is which if they go file-spelunking later.
+        let outputURL = dest.deletingPathExtension().appendingPathExtension("mp4")
+
+        // The Task carries the work off the main actor; FFmpegKit
+        // runs on its own thread pool internally. The final
+        // pads.setSource hop is `@MainActor` so SwiftUI publishers
+        // and Metal resource creation stay on the main thread.
+        Task.detached { [weak self] in
+            do {
+                _ = try await TranscodeService.transcodeToMP4(input: dest, output: outputURL)
+                // Original container is now superseded by the mp4;
+                // nuke it so we don't double-charge the user's
+                // Documents quota. Failure here is non-fatal — the
+                // transcoded mp4 is already where it needs to be.
+                try? FileManager.default.removeItem(at: dest)
+                await MainActor.run {
+                    guard let self else { return }
+                    self.pads.setSource(VideoFileSource(url: outputURL), at: index)
+                    P10Logger.log("[AppState] pad \(index + 1) source → transcoded \(outputURL.lastPathComponent)")
+                }
+            } catch {
+                // Leave the original copy in place — the user can
+                // try a different file. No UI yet, just a log line.
+                P10Logger.log("[AppState] pad \(index + 1) transcode failed: \(error)")
+            }
+        }
     }
 }
