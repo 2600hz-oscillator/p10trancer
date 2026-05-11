@@ -91,6 +91,20 @@ private struct OutputPadCell: View {
                             .padding(.top, 6)
                     }
                     Spacer()
+                    // Per-slot LFO sheet — matches the waveform icon
+                    // on video pads so the LFO is always one tap away
+                    // (no need to dig through the gear menu).
+                    Button { lfoPresented = true } label: {
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(5)
+                            .background(.black.opacity(0.6))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
+                    .padding(.trailing, 6)
                 }
                 Spacer()
                 HStack {
