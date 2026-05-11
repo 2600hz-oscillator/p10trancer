@@ -100,6 +100,79 @@ struct PadGridView: View {
                 if liveRecordings.loadIntoPad(index) { return }
                 mixer.routeActivePad(index)
             }
+            .contextMenu { padContextMenu(index: index) }
+    }
+
+    /// Long-press context menu for a pad cell. Surfaces the source
+    /// picker (Load Video, Camera, Chain, Master Feedback, both
+    /// instrument kinds, Reset) + Inspect FX. Lives on the outer
+    /// cellOverlay (not the inner ZStack) so long-press anywhere in
+    /// the cell — including the volume slider strip — opens it.
+    @ViewBuilder
+    private func padContextMenu(index: Int) -> some View {
+        Button {
+            P10Logger.log("[PadGridView] Load Video tapped for pad \(index + 1)")
+            pendingPadIndex = index
+            importerVisible = true
+        } label: {
+            Label("Load Video…", systemImage: "folder")
+        }
+        Menu {
+            if cameras.devices.isEmpty {
+                Text("No cameras detected")
+            } else {
+                ForEach(cameras.devices) { device in
+                    Button {
+                        AppState.shared.setCameraSource(deviceID: device.id, at: index)
+                    } label: {
+                        Label(device.label, systemImage: cameraIcon(for: device.kind))
+                    }
+                }
+            }
+        } label: {
+            Label("Camera", systemImage: "camera")
+        }
+        Menu {
+            ForEach(0..<PadSystem.padCount, id: \.self) { other in
+                if other != index {
+                    Button {
+                        AppState.shared.setPadChainSource(
+                            at: index, sourcePadIndex: other
+                        )
+                    } label: {
+                        Label("Pad \(other + 1)", systemImage: "rectangle.connected.to.line.below")
+                    }
+                }
+            }
+        } label: {
+            Label("Chain from another pad", systemImage: "link")
+        }
+        Button {
+            AppState.shared.setMasterFeedbackSource(at: index)
+        } label: {
+            Label("Master Feedback", systemImage: "arrow.triangle.2.circlepath")
+        }
+        Button {
+            AppState.shared.setInstrumentSource(at: index)
+        } label: {
+            Label("Instrument: Wavetable", systemImage: "pianokeys")
+        }
+        Button {
+            AppState.shared.setACIDKICKSource(at: index)
+        } label: {
+            Label("Instrument: ACIDKICK", systemImage: "metronome")
+        }
+        Button {
+            AppState.shared.reloadVideoSource(at: index)
+        } label: {
+            Label("Reset to Bundled", systemImage: "arrow.counterclockwise")
+        }
+        Divider()
+        Button {
+            mixer.inspectedPadIndex = index
+        } label: {
+            Label("Inspect FX", systemImage: "slider.horizontal.3")
+        }
     }
 
     /// All the per-pad UI that lives over the pad's VIDEO area (to
@@ -173,71 +246,6 @@ struct PadGridView: View {
                         }
                     }
             PadFooterControls(pad: pads.pads[index], padIndex: index)
-        }
-        .contextMenu {
-            Button {
-                P10Logger.log("[PadGridView] Load Video tapped for pad \(index + 1)")
-                pendingPadIndex = index
-                importerVisible = true
-            } label: {
-                Label("Load Video…", systemImage: "folder")
-            }
-            Menu {
-                if cameras.devices.isEmpty {
-                    Text("No cameras detected")
-                } else {
-                    ForEach(cameras.devices) { device in
-                        Button {
-                            AppState.shared.setCameraSource(deviceID: device.id, at: index)
-                        } label: {
-                            Label(device.label, systemImage: cameraIcon(for: device.kind))
-                        }
-                    }
-                }
-            } label: {
-                Label("Camera", systemImage: "camera")
-            }
-            Menu {
-                ForEach(0..<PadSystem.padCount, id: \.self) { other in
-                    if other != index {
-                        Button {
-                            AppState.shared.setPadChainSource(
-                                at: index, sourcePadIndex: other
-                            )
-                        } label: {
-                            Label("Pad \(other + 1)", systemImage: "rectangle.connected.to.line.below")
-                        }
-                    }
-                }
-            } label: {
-                Label("Chain from another pad", systemImage: "link")
-            }
-            Button {
-                AppState.shared.setMasterFeedbackSource(at: index)
-            } label: {
-                Label("Master Feedback", systemImage: "arrow.triangle.2.circlepath")
-            }
-            Button {
-                AppState.shared.setInstrumentSource(at: index)
-            } label: {
-                Label("Instrument: Wavetable", systemImage: "pianokeys")
-            }
-            Button {
-                AppState.shared.setACIDKICKSource(at: index)
-            } label: {
-                Label("Instrument: ACIDKICK", systemImage: "metronome")
-            }
-            Button {
-                AppState.shared.reloadVideoSource(at: index)
-            } label: {
-                Label("Reset to Bundled", systemImage: "arrow.counterclockwise")
-            }
-            Divider()
-            Button {
-                mixer.inspectedPadIndex = index
-            } label: {
-                Label("Inspect FX", systemImage: "slider.horizontal.3")
-            }
         }
     }
 
