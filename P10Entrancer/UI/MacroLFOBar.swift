@@ -181,7 +181,10 @@ private struct VUMeterBody: View {
     @State private var peakHoldUntil: Date = .distantPast
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0/30.0)) { context in
+        // 12 Hz sample rate; the bar is a chunky LED grid, not a
+        // waveform — sampling faster just makes single-frame audio
+        // spikes flicker the meter without any added information.
+        TimelineView(.animation(minimumInterval: 1.0/12.0)) { context in
             VUMeterDraw(level: CGFloat(displayLevel),
                         peak: CGFloat(peakLevel))
                 .onChange(of: context.date) { _, now in
@@ -192,16 +195,19 @@ private struct VUMeterBody: View {
     }
 
     private func update(to target: Float, now: Date) {
+        // Smoother attack: rather than snapping to peak instantly,
+        // pull part-way toward the target. Decay is slower too —
+        // a single quiet sample shouldn't drop the meter visibly.
         if target > displayLevel {
-            displayLevel = target  // instant attack
+            displayLevel = displayLevel + (target - displayLevel) * 0.55
         } else {
-            displayLevel = max(0, displayLevel * 0.90)  // exponential decay
+            displayLevel = max(0, displayLevel * 0.78)
         }
         if displayLevel >= peakLevel {
             peakLevel = displayLevel
-            peakHoldUntil = now.addingTimeInterval(0.8)
+            peakHoldUntil = now.addingTimeInterval(1.0)
         } else if now > peakHoldUntil {
-            peakLevel = max(0, peakLevel - 0.01)  // slow drift down
+            peakLevel = max(0, peakLevel - 0.02)
         }
     }
 }
@@ -229,10 +235,34 @@ private struct VUMeterDraw: View {
 
     /// How many discrete segments stack from bottom to top. 16 is a
     /// classic LED-meter density that reads clearly on a tall side
-    /// strip; the top three segments are red, the rest green —
-    /// matches the LED bargraph style.
+    /// strip.
     private static let segmentCount = 16
-    private static let redSegments = 3
+
+    /// LED color at position 0..1 from bottom→top. Dark green at the
+    /// floor, bright green by the middle, yellow at ~⅔, then ramps
+    /// to bright red at the top — gives the meter a clear "you're
+    /// approaching clip" visual ramp instead of a binary green/red.
+    private static func segmentColor(at fraction: CGFloat) -> Color {
+        let t = max(0, min(1, fraction))
+        // Three-stop interpolation: dark-green → yellow → bright-red.
+        let darkGreen   = (r: 0.05, g: 0.45, b: 0.08)
+        let midYellow   = (r: 0.95, g: 0.92, b: 0.10)
+        let brightRed   = (r: 1.00, g: 0.15, b: 0.10)
+        let stops: [(pos: Double, c: (r: Double, g: Double, b: Double))] = [
+            (0.0, darkGreen), (0.65, midYellow), (1.0, brightRed)
+        ]
+        for i in 0..<stops.count - 1 {
+            let a = stops[i], b = stops[i + 1]
+            if Double(t) <= b.pos {
+                let span = b.pos - a.pos
+                let k = span > 0 ? (Double(t) - a.pos) / span : 0
+                return Color(red: a.c.r + (b.c.r - a.c.r) * k,
+                             green: a.c.g + (b.c.g - a.c.g) * k,
+                             blue: a.c.b + (b.c.b - a.c.b) * k)
+            }
+        }
+        return Color(red: brightRed.r, green: brightRed.g, blue: brightRed.b)
+    }
 
     var body: some View {
         Canvas { ctx, size in
@@ -254,14 +284,10 @@ private struct VUMeterDraw: View {
                 let threshold = CGFloat(i + 1) / CGFloat(Self.segmentCount)
                 let peakBand = peak >= threshold && peak - threshold < 1.0 / CGFloat(Self.segmentCount)
                 let lit = level >= threshold || peakBand
-                let isRed = i >= Self.segmentCount - Self.redSegments
-                let baseColor = isRed
-                    ? Color(red: 1.0, green: 0.18, blue: 0.18)
-                    : Color(red: 0.20, green: 0.95, blue: 0.20)
+                // Color ramps with position so each segment in the
+                // bargraph has its own tint along dark-green→yellow→red.
+                let baseColor = Self.segmentColor(at: CGFloat(i) / CGFloat(Self.segmentCount - 1))
                 let color = lit ? baseColor : baseColor.opacity(0.22)
-                // y is measured from the top; segment i sits with its
-                // bottom edge at (h - innerPad - i*(segH+gap)) and its
-                // top edge segH above.
                 let bottomY = h - innerPad - CGFloat(i) * (segH + segGap)
                 let topY = bottomY - segH
                 let rect = CGRect(x: innerPad, y: topY, width: usableW, height: segH)

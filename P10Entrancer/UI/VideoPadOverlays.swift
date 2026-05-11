@@ -205,4 +205,7 @@ struct VideoPadOverlays: View {
 }
 
 private let SCRUB_TRACK_HEIGHT: CGFloat = 6
-private let SPEED_TRACK_HEIGHT: CGFloat = 5
+/// Speed slider visual + hit-area height. Deliberately tall (~4×
+/// the scrub track) so the slider is easy to grab on the small
+/// pad; it overlaps the thumbnail, which is fine.
+private let SPEED_TRACK_HEIGHT: CGFloat = 20
