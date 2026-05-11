@@ -383,6 +383,23 @@ final class AppState {
         P10Logger.log("[AppState] pad \(index + 1) source → MasterFeedback")
     }
 
+    /// Set pad `targetIndex`'s source to forward another pad's
+    /// processed texture. Refuses self-references (pad N can't chain
+    /// from pad N — that's an infinite read on the same property).
+    /// Longer cycles (A→B→A) are allowed; they resolve to 1-frame
+    /// lag at the render pass.
+    func setPadChainSource(at targetIndex: Int, sourcePadIndex: Int) {
+        guard targetIndex != sourcePadIndex else {
+            P10Logger.log("[AppState] refusing self-chain on pad \(targetIndex + 1)")
+            return
+        }
+        guard pads.pads.indices.contains(targetIndex),
+              pads.pads.indices.contains(sourcePadIndex) else { return }
+        pads.setSource(PadChainSource(sourcePadIndex: sourcePadIndex, pads: pads),
+                       at: targetIndex)
+        P10Logger.log("[AppState] pad \(targetIndex + 1) source → pad \(sourcePadIndex + 1) (chain)")
+    }
+
     func reloadVideoSource(at index: Int) {
         let resource = "pad\(index + 1)"
         if let url = Bundle.main.url(forResource: resource, withExtension: "mp4") {

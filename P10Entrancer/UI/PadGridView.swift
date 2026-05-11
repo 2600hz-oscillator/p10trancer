@@ -113,6 +113,21 @@ struct PadGridView: View {
                 // Keyer / feedback as pad sources removed: those now
                 // live as their own output pads in the row beneath the
                 // 3×3 grid. Cameras stay assignable.
+                Menu {
+                    ForEach(0..<PadSystem.padCount, id: \.self) { other in
+                        if other != index {
+                            Button {
+                                AppState.shared.setPadChainSource(
+                                    at: index, sourcePadIndex: other
+                                )
+                            } label: {
+                                Label("Pad \(other + 1)", systemImage: "rectangle.connected.to.line.below")
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Chain from another pad", systemImage: "link")
+                }
                 Button {
                     AppState.shared.setMasterFeedbackSource(at: index)
                 } label: {
