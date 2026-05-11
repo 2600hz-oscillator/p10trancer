@@ -5,7 +5,10 @@ import SwiftUI
 struct LFOSettingsSheet: View {
     let title: String
     @ObservedObject var lfo: LFOState
-    let engine: LFOEngine
+    /// Allowed assignment targets for THIS LFO. Per-pad / per-keyer /
+    /// per-feedback LFOs see only their own params; macro LFOs see
+    /// the full pool including the master mixer position.
+    let availableTargets: [LFOTarget]
     let transport: Transport
     @Environment(\.dismiss) private var dismiss
 
@@ -124,7 +127,7 @@ struct LFOSettingsSheet: View {
                         get: { lfo.assignments[i] },
                         set: { lfo.assignments[i] = $0 }
                     ),
-                    targets: engine.allTargets
+                    targets: availableTargets
                 )
             }
         }

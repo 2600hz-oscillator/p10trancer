@@ -122,9 +122,27 @@ enum LFOTargets {
         ]
     }
 
+    // MARK: - Global (macro-only targets)
+
+    /// Targets that are NOT scoped to a specific pad/keyer/feedback —
+    /// e.g., the master mixer position fader. Only the two macro LFOs
+    /// see these; per-pad LFOs are filtered out by id prefix.
+    static func forMixer(_ mixer: MixerState) -> [LFOTarget] {
+        return [
+            LFOTarget(
+                id: "mixer.position",
+                displayName: "MASTER: Position",
+                range: 0...1,
+                getBase: { mixer.position },
+                setEffective: { mixer.position = $0 }
+            )
+        ]
+    }
+
     /// Stable slot id used by LFOEngine to find/create the LFOState
     /// for each modulatable surface.
     static func slotID(forPadIndex i: Int) -> String { "pad-\(i)" }
     static func slotID(forKeyerIndex i: Int) -> String { "keyer-\(i)" }
     static let feedbackSlotID = "feedback"
+    static func slotID(forMacroIndex i: Int) -> String { "macro-\(i)" }
 }

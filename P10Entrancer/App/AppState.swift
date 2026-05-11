@@ -286,6 +286,9 @@ final class AppState {
         if let fb = feedbackSystem.unit(at: 0) {
             lfoEngine.registerTargets(LFOTargets.forFeedback(state: fb))
         }
+        // Global / macro-only: mixer position. Only macros see this
+        // (LFOEngine.availableTargets(forSlot:) filters per slot).
+        lfoEngine.registerTargets(LFOTargets.forMixer(mixer))
     }
 
     private func wireMasterVolume() {

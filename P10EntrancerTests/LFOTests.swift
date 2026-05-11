@@ -138,6 +138,68 @@ final class LFOTests: XCTestCase {
                        "Switching clock source must stop transport so the new source can drive it")
     }
 
+    // MARK: - Scoping
+
+    func test_pad_lfo_only_sees_its_own_pad_targets() {
+        let transport = Transport()
+        let engine = LFOEngine(transport: transport)
+        engine.registerTargets([
+            LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "pad.3.volume", displayName: "P4 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "keyer.0.threshold", displayName: "K1 thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "feedback.zoom", displayName: "FB zoom", range: 0.5...2, getBase: { 1 }, setEffective: { _ in }),
+            LFOTarget(id: "mixer.position", displayName: "Position", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+        ])
+        let pad0Targets = engine.availableTargets(forSlot: "pad-0")
+        XCTAssertEqual(pad0Targets.count, 1)
+        XCTAssertEqual(pad0Targets.first?.id, "pad.0.volume",
+                       "pad-0 LFO must only see pad.0.* targets, NOT pad.3 or keyer or mixer")
+    }
+
+    func test_keyer_lfo_only_sees_its_own_keyer_targets() {
+        let transport = Transport()
+        let engine = LFOEngine(transport: transport)
+        engine.registerTargets([
+            LFOTarget(id: "keyer.0.threshold", displayName: "K1 thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "keyer.1.threshold", displayName: "K2 thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+        ])
+        let k0 = engine.availableTargets(forSlot: "keyer-0")
+        XCTAssertEqual(k0.map(\.id), ["keyer.0.threshold"])
+    }
+
+    func test_macro_lfo_sees_everything_including_mixer_position() {
+        let transport = Transport()
+        let engine = LFOEngine(transport: transport)
+        engine.registerTargets([
+            LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "keyer.0.threshold", displayName: "K1 thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "feedback.zoom", displayName: "FB zoom", range: 0.5...2, getBase: { 1 }, setEffective: { _ in }),
+            LFOTarget(id: "mixer.position", displayName: "Position", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+        ])
+        let macroTargets = engine.availableTargets(forSlot: "macro-0")
+        let ids = Set(macroTargets.map(\.id))
+        XCTAssertTrue(ids.contains("pad.0.volume"))
+        XCTAssertTrue(ids.contains("keyer.0.threshold"))
+        XCTAssertTrue(ids.contains("feedback.zoom"))
+        XCTAssertTrue(ids.contains("mixer.position"),
+                      "macro LFO must be able to target the master mixer position")
+    }
+
+    func test_non_macro_lfos_cannot_see_mixer_position() {
+        let transport = Transport()
+        let engine = LFOEngine(transport: transport)
+        engine.registerTargets([
+            LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "mixer.position", displayName: "Position", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+        ])
+        for slot in ["pad-0", "pad-8", "keyer-0", "keyer-1", "feedback"] {
+            let ids = Set(engine.availableTargets(forSlot: slot).map(\.id))
+            XCTAssertFalse(ids.contains("mixer.position"),
+                           "\(slot) LFO must NOT be able to target the master position")
+        }
+    }
+
     func test_external_clock_ignored_when_source_is_internal() {
         let t = Transport()
         t.clockSource = .internalClock

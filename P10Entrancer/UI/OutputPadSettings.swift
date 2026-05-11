@@ -114,10 +114,11 @@ struct KeyerSettingsSheet: View {
         .background(.black)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showLFO) {
+            let slot = LFOTargets.slotID(forKeyerIndex: keyerIndex)
             LFOSettingsSheet(
                 title: "KEYER \(keyerIndex + 1)",
-                lfo: AppState.shared.lfoEngine.lfo(for: LFOTargets.slotID(forKeyerIndex: keyerIndex)),
-                engine: AppState.shared.lfoEngine,
+                lfo: AppState.shared.lfoEngine.lfo(for: slot),
+                availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: slot),
                 transport: AppState.shared.transport
             )
         }
@@ -188,7 +189,7 @@ struct FeedbackSettingsSheet: View {
             LFOSettingsSheet(
                 title: "FEEDBACK",
                 lfo: AppState.shared.lfoEngine.lfo(for: LFOTargets.feedbackSlotID),
-                engine: AppState.shared.lfoEngine,
+                availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: LFOTargets.feedbackSlotID),
                 transport: AppState.shared.transport
             )
         }

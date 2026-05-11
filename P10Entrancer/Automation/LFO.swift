@@ -145,7 +145,7 @@ final class LFOEngine: ObservableObject {
     }
 
     /// Lookup or create the LFO state for a given slot. Slot keys:
-    ///   pad-0..pad-8, keyer-0, keyer-1, feedback
+    ///   pad-0..pad-8, keyer-0, keyer-1, feedback, macro-0, macro-1
     func lfo(for slotID: String) -> LFOState {
         if let existing = lfos[slotID] { return existing }
         let s = LFOState()
@@ -153,10 +153,34 @@ final class LFOEngine: ObservableObject {
         return s
     }
 
-    /// Available targets — used by the LFO sheet to populate the
-    /// assign-target picker.
-    var allTargets: [LFOTarget] {
-        Array(targetsByID.values).sorted { $0.displayName < $1.displayName }
+    /// Targets a given LFO slot is allowed to modulate:
+    ///   - pad-N → only that pad's targets (volume + its FX params)
+    ///   - keyer-N → only that keyer's params
+    ///   - feedback → only the feedback unit's params
+    ///   - macro-N → everything, including the master mixer position
+    ///   - any other → empty
+    /// Per-pad LFOs are scoped so the user can't accidentally hook a
+    /// pad LFO into a different pad's params; macros are the single
+    /// place position-style global modulation lives.
+    func availableTargets(forSlot slotID: String) -> [LFOTarget] {
+        if slotID.hasPrefix("macro-") {
+            return Array(targetsByID.values).sorted { $0.displayName < $1.displayName }
+        }
+        let prefix: String
+        if slotID == "feedback" {
+            prefix = "feedback."
+        } else if slotID.hasPrefix("keyer-"),
+                  let i = Int(slotID.dropFirst("keyer-".count)) {
+            prefix = "keyer.\(i)."
+        } else if slotID.hasPrefix("pad-"),
+                  let i = Int(slotID.dropFirst("pad-".count)) {
+            prefix = "pad.\(i)."
+        } else {
+            return []
+        }
+        return targetsByID.values
+            .filter { $0.id.hasPrefix(prefix) }
+            .sorted { $0.displayName < $1.displayName }
     }
 
     func target(id: String) -> LFOTarget? { targetsByID[id] }

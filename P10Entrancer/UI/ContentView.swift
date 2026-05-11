@@ -29,15 +29,17 @@ struct ContentView: View {
             // 20% so the master preview can take the rest. Same trim
             // applies in portrait and landscape — keeps aspect at 4:3
             // and the top preview from being squeezed.
+            let macroBarH: CGFloat = 64
+            let workHForGrid = workH - macroBarH
             let cellByWidth = w / 3
-            let cellByHeight = (workH * 0.78) / 4 * (4.0/3.0)
+            let cellByHeight = (workHForGrid * 0.78) / 4 * (4.0/3.0)
             let cellW = min(cellByWidth, cellByHeight) * 0.80
             let cellH = cellW * 3.0 / 4.0
             let gridW = cellW * 3
             let sourceH = cellH * 3
             let outputRowH = cellH
             let gridTotalH = sourceH + outputRowH
-            let outputH = max(80, workH - gridTotalH - 2) // 2 px for the dividers
+            let outputH = max(80, workH - gridTotalH - macroBarH - 4) // 4 px for the dividers
 
             VStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
@@ -47,6 +49,13 @@ struct ContentView: View {
                 .frame(height: outputH)
                 .frame(maxWidth: .infinity)
                 .background(.black)
+
+                Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
+
+                MacroLFOBar(engine: appState.lfoEngine, transport: appState.transport)
+                    .frame(height: macroBarH)
+                    .frame(maxWidth: .infinity)
+                    .background(.black)
 
                 Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
 

@@ -31,10 +31,11 @@ struct PadFooterControls: View {
                 Spacer()
             }
             .sheet(isPresented: $lfoSheet) {
+                let slot = LFOTargets.slotID(forPadIndex: padIndex)
                 LFOSettingsSheet(
                     title: "PAD \(padIndex + 1)",
-                    lfo: AppState.shared.lfoEngine.lfo(for: LFOTargets.slotID(forPadIndex: padIndex)),
-                    engine: AppState.shared.lfoEngine,
+                    lfo: AppState.shared.lfoEngine.lfo(for: slot),
+                    availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: slot),
                     transport: AppState.shared.transport
                 )
             }
