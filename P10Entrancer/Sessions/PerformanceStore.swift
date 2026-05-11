@@ -124,7 +124,10 @@ final class PerformanceStore: ObservableObject {
     /// Tracked in UserDefaults so we don't overwrite a user's edits
     /// after they LOAD + tweak + re-SAVE "Factory".
     static let factoryName = "Factory"
-    private static let bootstrappedDefaultsKey = "p10e.factoryBootstrapped"
+    /// Bump this key's version suffix any time the bundled pad
+    /// videos change so existing installs re-bootstrap Factory and
+    /// pick up the new content. Older flag values are ignored.
+    private static let bootstrappedDefaultsKey = "p10e.factoryBootstrapped.v2"
 
     func bootstrapFactoryIfNeeded() {
         let defaults = UserDefaults.standard
