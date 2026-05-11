@@ -135,47 +135,45 @@ final class ACIDKICKSource: PadSource, ObservableObject {
 
     // MARK: - Visualization
 
-    /// Render the acidwarp-style backdrop + rainbow waveform overlay
-    /// + (when active) the comic POW caption.
+    /// Render the visualizer: four horizontal acidwarp bands stacked
+    /// top to bottom, one per voice. Each band is tinted by its
+    /// voice's signature color (kick = red, snare = orange, hat =
+    /// yellow, tom = purple), brightens with that voice's recent
+    /// peak amplitude, and shows a scope of that voice's last ~20 ms
+    /// of samples overlaid in a complementary hue. POW caption
+    /// composites across the whole image when a kick fires.
     private func renderAcidwarp() {
         guard let texture = currentTexture else { return }
         let w = textureWidth
         let h = textureHeight
         let t = Float(CACurrentMediaTime() - startTime)
-        // Acidwarp background: a sin/cos field downsampled 4× then
-        // upscaled, colored from a time-cycling rainbow palette.
-        let downsample = 4
-        let dw = w / downsample
-        let dh = h / downsample
-        for by in 0..<dh {
-            let yf = Float(by) * 0.18
-            let ay = sinf(yf + t * 1.7)
-            for bx in 0..<dw {
-                let xf = Float(bx) * 0.14
-                let ax = cosf(xf + t * 2.1)
-                let warp = ax + ay + sinf((xf + yf) * 0.4 + t * 3.0)
-                let paletteFrac = (warp * 0.25 + 0.5)
-                let hue = paletteFrac + t * 0.1
-                let color = hsvColor(hueFrac: hue, brightness: 1)
-                let yStart = by * downsample
-                let xStart = bx * downsample
-                for dy in 0..<downsample {
-                    let row = (yStart + dy) * w
-                    for dx in 0..<downsample {
-                        pixelBuffer[row + xStart + dx] = color
-                    }
-                }
-            }
+        let trackCount = DrumSequencer.trackCount
+        let bandHeight = h / trackCount
+        for band in 0..<trackCount {
+            let yStart = band * bandHeight
+            let yEnd = (band == trackCount - 1) ? h : (band + 1) * bandHeight
+            let voiceType = sequencer.tracks[band].voiceType
+            let peak = renderer.peak(voiceIndex: band)
+            // Activity 0..1 — light decay so the band stays lit for
+            // a beat after the voice fires, then dims back down.
+            let activity = max(0, min(1, peak * 3.0))
+            let baseHue = Self.bandHue(for: voiceType)
+            renderAcidwarpBand(yStart: yStart, yEnd: yEnd,
+                                t: t, baseHue: baseHue, activity: activity)
+            drawBandScope(yStart: yStart, yEnd: yEnd,
+                          voiceIndex: band, baseHue: baseHue, t: t)
         }
-        // Rainbow waveform overlay: read a snapshot of recent
-        // samples and draw a polyline across the middle of the
-        // texture with a per-segment hue offset.
-        drawWaveformOverlay(t: t)
-        // POW flash. Quick scale-in via the remaining time fraction
-        // so the caption pops on impact then settles.
+        // Thin separator lines between bands so each track reads as
+        // its own strip without going full Mondrian.
+        for band in 1..<trackCount {
+            let y = band * bandHeight
+            let row = y * w
+            for x in 0..<w { pixelBuffer[row + x] = 0xFF000000 }
+        }
+        // POW flash on kick.
         let now = CACurrentMediaTime()
         if now < powExpiry {
-            let progress = (powExpiry - now) / powDurationSec  // 1→0
+            let progress = (powExpiry - now) / powDurationSec
             let scale = Float(1.0 + (progress - 0.5) * 0.4)
             compositePOW(scale: max(0.6, scale), alpha: Float(min(1.0, progress * 2)))
         }
@@ -187,26 +185,95 @@ final class ACIDKICKSource: PadSource, ObservableObject {
         }
     }
 
-    private func drawWaveformOverlay(t: Float) {
+    /// Per-band acidwarp pattern: sin/cos field downsampled 4× and
+    /// rendered as colored chunky cells. `baseHue` ties the palette
+    /// to the voice type; `activity` brightens the band when the
+    /// voice is firing.
+    private func renderAcidwarpBand(yStart: Int, yEnd: Int,
+                                     t: Float,
+                                     baseHue: Float,
+                                     activity: Float) {
         let w = textureWidth
-        let h = textureHeight
-        let snap = renderer.snapshotRecentSamples()
+        let downsample = 4
+        let dy0 = yStart / downsample
+        let dy1 = (yEnd + downsample - 1) / downsample
+        let dxCount = w / downsample
+        // Band brightness floor: 0.35 at rest, up to 1.0 at peak.
+        // Saturation also climbs with activity so quiet bands feel
+        // muted and loud ones feel pumped.
+        let baseBrightness: Float = 0.35 + activity * 0.6
+        let sat: Float = 0.6 + activity * 0.4
+        for by in dy0..<dy1 {
+            let yf = Float(by) * 0.22
+            let ay = sinf(yf + t * 1.7)
+            for bx in 0..<dxCount {
+                let xf = Float(bx) * 0.18
+                let ax = cosf(xf + t * 2.1)
+                let warp = ax + ay + sinf((xf + yf) * 0.4 + t * 3.0)
+                let palette = warp * 0.18  // tighter swing — keeps the
+                                            // hue near baseHue so the
+                                            // band reads as "that color"
+                let hue = baseHue + palette + t * 0.04
+                let color = hsvColor(hueFrac: hue,
+                                     brightness: baseBrightness,
+                                     saturation: sat)
+                let yPxStart = by * downsample
+                let xStart = bx * downsample
+                for dy in 0..<downsample {
+                    let yPx = yPxStart + dy
+                    if yPx < yStart || yPx >= yEnd { continue }
+                    let row = yPx * w
+                    for dx in 0..<downsample {
+                        let xPx = xStart + dx
+                        if xPx < w { pixelBuffer[row + xPx] = color }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Draws a polyline of `voiceIndex`'s recent samples inside its
+    /// band. Hue offset by ~0.5 from the band's base so the trace
+    /// pops against the background.
+    private func drawBandScope(yStart: Int, yEnd: Int,
+                                voiceIndex: Int,
+                                baseHue: Float, t: Float) {
+        let w = textureWidth
+        let bandH = yEnd - yStart
+        let midY = yStart + bandH / 2
+        let span = bandH / 2 - 2  // leave a pixel of breathing room
+        let snap = renderer.snapshotRecentSamples(voiceIndex: voiceIndex)
         guard !snap.isEmpty else { return }
-        let midY = h / 2
-        let span = h / 3
+        let scopeHue = baseHue + 0.5
+        let scopeColor = hsvColor(hueFrac: scopeHue + t * 0.3,
+                                  brightness: 1, saturation: 1)
         var prevX = -1, prevY = -1
         let drawSteps = w
         for i in 0..<drawSteps {
             let sampleIdx = i * snap.count / drawSteps
             let s = snap[sampleIdx]
-            let y = midY - Int(s * Float(span))
+            // Clamp y to inside the band so a hot sample can't paint
+            // into a neighboring track.
+            var y = midY - Int(s * Float(span))
+            if y < yStart { y = yStart }
+            if y >= yEnd { y = yEnd - 1 }
             let x = i
-            let hue = Float(i) / Float(drawSteps) + t * 0.5
-            let color = hsvColor(hueFrac: hue, brightness: 1)
             if prevX >= 0 {
-                drawLine(x0: prevX, y0: prevY, x1: x, y1: y, color: color)
+                drawLine(x0: prevX, y0: prevY, x1: x, y1: y, color: scopeColor)
             }
             prevX = x; prevY = y
+        }
+    }
+
+    /// Signature hue per drum voice type. Matches the chip colors
+    /// in the settings sheet so the visualization and the editor
+    /// read consistently.
+    private static func bandHue(for type: DrumVoiceType) -> Float {
+        switch type {
+        case .kick:  return 0.00     // red
+        case .snare: return 0.06     // orange
+        case .hat:   return 0.14     // yellow
+        case .tom:   return 0.78     // purple
         }
     }
 
@@ -282,22 +349,30 @@ final class ACIDKICKSource: PadSource, ObservableObject {
         }
     }
 
-    private func hsvColor(hueFrac: Float, brightness: Float) -> UInt32 {
+    /// HSV → RGB packed BGRA. Saturation defaults to 1 so existing
+    /// callers (e.g. the POW caption / legacy scope code) keep
+    /// their fully-saturated look; band rendering passes a lower
+    /// saturation to mute quiet bands.
+    private func hsvColor(hueFrac: Float,
+                           brightness: Float,
+                           saturation: Float = 1) -> UInt32 {
         let hf = hueFrac - floor(hueFrac)
         let h = hf * 6
         let i = Int(h)
         let f = h - Float(i)
-        let v: Float = brightness
-        let q = v * (1 - f)
-        let qt = v * f
+        let v = max(0, min(1, brightness))
+        let s = max(0, min(1, saturation))
+        let p = v * (1 - s)
+        let q = v * (1 - s * f)
+        let qt = v * (1 - s * (1 - f))
         var r: Float = 0, g: Float = 0, b: Float = 0
         switch i % 6 {
-        case 0: r = v;  g = qt; b = 0
-        case 1: r = q;  g = v;  b = 0
-        case 2: r = 0;  g = v;  b = qt
-        case 3: r = 0;  g = q;  b = v
-        case 4: r = qt; g = 0;  b = v
-        default: r = v; g = 0;  b = q
+        case 0: r = v;  g = qt; b = p
+        case 1: r = q;  g = v;  b = p
+        case 2: r = p;  g = v;  b = qt
+        case 3: r = p;  g = q;  b = v
+        case 4: r = qt; g = p;  b = v
+        default: r = v; g = p;  b = q
         }
         return 0xFF000000
             | UInt32(r * 255) << 16
@@ -356,27 +431,42 @@ final class ACIDKICKSource: PadSource, ObservableObject {
 
 /// Stereo render bridge between PadAudioPlayer's AVAudioSourceNode
 /// and the ACIDKICK voices. Each render block clears the L/R
-/// buffers, then asks every voice to renderAdd in turn. Also
-/// captures the last frame of mono-mixed samples for the
-/// visualizer's waveform overlay (lock-free single writer / single
-/// reader via an atomic index).
+/// buffers, asks every voice to renderAdd into a per-voice scratch
+/// pair, sums those into the output, then mirrors each voice's mono
+/// scratch into its own ring buffer so the visualizer can draw one
+/// band per voice.
 final class ACIDKICKRenderer: PadStereoRenderer, @unchecked Sendable {
     private var voices: [DrumVoice]
-    /// Ring buffer of recent mono samples for the visualizer. 1024
-    /// samples ≈ 20 ms @ 48k — enough to trace a clear shape across
-    /// the texture.
-    private var recentSamples = [Float](repeating: 0, count: 1024)
-    private var writeIndex: Int = 0
-    private let recentLock = NSLock()  // protects the snapshot read
+    /// Per-voice ring buffers of recent mono samples. 1024 samples ≈
+    /// 20 ms @ 48k — enough for a clean scope trace across the
+    /// texture width. One buffer per track so the 4-band visualizer
+    /// can render each voice independently.
+    private var perVoiceSamples: [[Float]]
+    private var perVoiceWriteIdx: [Int]
+    /// Latest peak amplitude per voice (max abs sample seen in the
+    /// most recent render block). The visualizer reads this to
+    /// brighten a band when its voice is firing.
+    private var perVoicePeak: [Float]
+    /// Scratch buffers reused across renders so the audio thread
+    /// never allocates. Sized lazily up to the largest buffer the
+    /// engine ever asks for.
+    private var scratchL: [Float] = []
+    private var scratchR: [Float] = []
+    private let recentLock = NSLock()
+
+    static let bufferSize = 1024
 
     init(voices: [DrumVoice]) {
         self.voices = voices
+        let n = voices.count
+        self.perVoiceSamples = (0..<n).map { _ in
+            [Float](repeating: 0, count: Self.bufferSize)
+        }
+        self.perVoiceWriteIdx = [Int](repeating: 0, count: n)
+        self.perVoicePeak = [Float](repeating: 0, count: n)
     }
 
     /// Swap in updated voices (e.g. after a track voiceType change).
-    /// Called from the main thread; the audio thread reads `voices`
-    /// per render, so this is a write to the array reference that
-    /// the audio thread eventually sees.
     func setVoices(_ v: [DrumVoice]) {
         recentLock.lock()
         defer { recentLock.unlock() }
@@ -388,38 +478,81 @@ final class ACIDKICKRenderer: PadStereoRenderer, @unchecked Sendable {
                             count: Int,
                             sampleRate: Double) {
         for i in 0..<count { left[i] = 0; right[i] = 0 }
+        // Grow scratch if the engine asked for a bigger buffer than
+        // we've seen before — done outside the lock since the array
+        // mutation is one-time at this size.
+        if scratchL.count < count {
+            scratchL = [Float](repeating: 0, count: count)
+            scratchR = [Float](repeating: 0, count: count)
+        }
         recentLock.lock()
         let activeVoices = voices
         recentLock.unlock()
-        for voice in activeVoices {
-            voice.renderAdd(left: left, right: right, count: count, sampleRate: sampleRate)
+        recentLock.lock()
+        for vi in activeVoices.indices {
+            for i in 0..<count { scratchL[i] = 0; scratchR[i] = 0 }
+            scratchL.withUnsafeMutableBufferPointer { lp in
+                scratchR.withUnsafeMutableBufferPointer { rp in
+                    activeVoices[vi].renderAdd(left: lp.baseAddress!,
+                                                right: rp.baseAddress!,
+                                                count: count,
+                                                sampleRate: sampleRate)
+                }
+            }
+            var peak: Float = 0
+            // Accumulate into the master mix and stash the mono
+            // scratch into the per-voice ring buffer for the band
+            // viz to consume.
+            if perVoiceSamples.indices.contains(vi) {
+                var idx = perVoiceWriteIdx[vi]
+                let ring = Self.bufferSize
+                for i in 0..<count {
+                    let l = scratchL[i]
+                    let r = scratchR[i]
+                    let mono = (l + r) * 0.5
+                    if abs(mono) > peak { peak = abs(mono) }
+                    perVoiceSamples[vi][idx] = mono
+                    idx = (idx + 1) % ring
+                    left[i] += l
+                    right[i] += r
+                }
+                perVoiceWriteIdx[vi] = idx
+                perVoicePeak[vi] = peak
+            } else {
+                for i in 0..<count {
+                    left[i] += scratchL[i]
+                    right[i] += scratchR[i]
+                }
+            }
         }
+        recentLock.unlock()
         // Soft limit so multiple voices doubling up don't clip.
         for i in 0..<count {
             left[i] = max(-1, min(1, left[i] * 0.7))
             right[i] = max(-1, min(1, right[i] * 0.7))
         }
-        // Snapshot into the ring buffer.
-        recentLock.lock()
-        for i in 0..<count {
-            let mono = (left[i] + right[i]) * 0.5
-            recentSamples[writeIndex] = mono
-            writeIndex = (writeIndex + 1) % recentSamples.count
-        }
-        recentLock.unlock()
     }
 
-    /// Copy the recent-samples buffer in playback order (oldest →
-    /// newest). Called from the main thread by the visualizer.
-    func snapshotRecentSamples() -> [Float] {
+    /// Copy a voice's ring buffer in playback order (oldest →
+    /// newest). Called from the main thread.
+    func snapshotRecentSamples(voiceIndex: Int) -> [Float] {
         recentLock.lock()
         defer { recentLock.unlock() }
-        let count = recentSamples.count
-        let start = writeIndex
-        var out = [Float](repeating: 0, count: count)
-        for i in 0..<count {
-            out[i] = recentSamples[(start + i) % count]
-        }
+        guard perVoiceSamples.indices.contains(voiceIndex) else { return [] }
+        let buffer = perVoiceSamples[voiceIndex]
+        let start = perVoiceWriteIdx[voiceIndex]
+        let n = buffer.count
+        var out = [Float](repeating: 0, count: n)
+        for i in 0..<n { out[i] = buffer[(start + i) % n] }
         return out
+    }
+
+    /// Current per-voice peak — the visualizer brightens its band
+    /// proportionally to this. Cheap read, no buffer copy.
+    func peak(voiceIndex: Int) -> Float {
+        recentLock.lock()
+        defer { recentLock.unlock() }
+        guard perVoicePeak.indices.contains(voiceIndex) else { return 0 }
+        return perVoicePeak[voiceIndex]
     }
 }
