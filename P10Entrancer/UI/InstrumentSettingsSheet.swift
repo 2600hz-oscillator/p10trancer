@@ -43,6 +43,7 @@ struct InstrumentSettingsSheet: View {
                     stepGridSection
                     keyboardSection
                     adsrSection
+                    reverbSection
                 }
                 .padding(20)
             }
@@ -341,6 +342,34 @@ struct InstrumentSettingsSheet: View {
                            range: 0.001...3.0)
             }
         }
+    }
+
+    // MARK: - Reverb
+
+    private var reverbSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("REVERB")
+                .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.7))
+            HStack(spacing: 12) {
+                adsrSlider(label: "SIZE",
+                           value: reverbBinding(\.size),
+                           range: 0...1)
+                adsrSlider(label: "DAMP",
+                           value: reverbBinding(\.damp),
+                           range: 0...1)
+                adsrSlider(label: "WET/DRY",
+                           value: reverbBinding(\.wet),
+                           range: 0...1)
+            }
+        }
+    }
+
+    private func reverbBinding(_ keyPath: ReferenceWritableKeyPath<SimpleReverb, Float>) -> Binding<Float> {
+        Binding(
+            get: { instrument.reverb[keyPath: keyPath] },
+            set: { instrument.reverb[keyPath: keyPath] = $0 }
+        )
     }
 
     private func adsrBinding(_ keyPath: ReferenceWritableKeyPath<ADSREnvelope, Float>) -> Binding<Float> {

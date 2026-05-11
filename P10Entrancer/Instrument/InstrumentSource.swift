@@ -18,6 +18,10 @@ final class InstrumentSource: PadSource, ObservableObject {
 
     let synth: WaveCelSynth
     let adsr: ADSREnvelope
+    /// Stereo reverb applied after synth + ADSR. Lives on the
+    /// instrument because the reverb tail is part of the patch
+    /// sound, not a master-bus effect.
+    let reverb: SimpleReverb
     @Published var sequencer = StepSequencer()
     /// Drives whether the sequencer advances on ticks. Toggled by the
     /// per-pad play/stop button. When false, the playhead freezes and
@@ -50,8 +54,16 @@ final class InstrumentSource: PadSource, ObservableObject {
         self.context = context
         let synth = WaveCelSynth()
         let adsr = ADSREnvelope()
+        // Build reverb at the engine's native sample rate so the
+        // delay tunings match. A slight mistuning (engine running at
+        // 44.1k while we initialize at 48k or vice versa) is
+        // inaudible — the reverb is a coloration, not a precise
+        // clock — but matching the rate keeps the size knob honest.
+        let engineSR = AudioEngine.shared.engine.outputNode.outputFormat(forBus: 0).sampleRate
+        let reverb = SimpleReverb(sampleRate: engineSR > 0 ? engineSR : 48000)
         self.synth = synth
         self.adsr = adsr
+        self.reverb = reverb
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm,
             width: textureWidth, height: textureHeight,
@@ -62,7 +74,7 @@ final class InstrumentSource: PadSource, ObservableObject {
         self.currentTexture = context.device.makeTexture(descriptor: descriptor)
         self.pixelBuffer = [UInt32](repeating: 0xFF101010,
                                     count: textureWidth * textureHeight)
-        let renderer = WaveCelSynthRenderer(synth: synth, adsr: adsr)
+        let renderer = WaveCelSynthRenderer(synth: synth, adsr: adsr, reverb: reverb)
         self.audioPlayer = PadAudioPlayer(source: .synth(renderer),
                                            label: "instrument")
         sequencer.onStepTrigger = { [weak self] step in
@@ -173,10 +185,12 @@ final class InstrumentSource: PadSource, ObservableObject {
 final class WaveCelSynthRenderer: @unchecked Sendable {
     private let synth: WaveCelSynth
     private let adsr: ADSREnvelope
+    private let reverb: SimpleReverb
 
-    init(synth: WaveCelSynth, adsr: ADSREnvelope) {
+    init(synth: WaveCelSynth, adsr: ADSREnvelope, reverb: SimpleReverb) {
         self.synth = synth
         self.adsr = adsr
+        self.reverb = reverb
     }
 
     /// Render-block scratch for the envelope. Allocated once and
@@ -206,6 +220,10 @@ final class WaveCelSynthRenderer: @unchecked Sendable {
                 right[i] *= scratch[i]
             }
         }
+        // Reverb sits at the tail of the chain — runs in-place on
+        // the post-ADSR stereo signal so the tail rings out after
+        // the envelope releases.
+        reverb.process(left: left, right: right, count: count)
     }
 
     func renderBlock(into out: UnsafeMutablePointer<Float>, count: Int, sampleRate: Double) {

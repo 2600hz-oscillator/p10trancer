@@ -90,6 +90,25 @@ enum LFOTargets {
                           getBase: { adsr.release },
                           setEffective: { adsr.release = $0 }),
             ]
+            // Reverb params.
+            let reverb = inst.reverb
+            targets += [
+                LFOTarget(id: "pad.\(index).reverb.size",
+                          displayName: "PAD \(padNumber): REVERB — Size",
+                          range: 0...1,
+                          getBase: { reverb.size },
+                          setEffective: { reverb.size = $0 }),
+                LFOTarget(id: "pad.\(index).reverb.damp",
+                          displayName: "PAD \(padNumber): REVERB — Damp",
+                          range: 0...1,
+                          getBase: { reverb.damp },
+                          setEffective: { reverb.damp = $0 }),
+                LFOTarget(id: "pad.\(index).reverb.wet",
+                          displayName: "PAD \(padNumber): REVERB — Wet/Dry",
+                          range: 0...1,
+                          getBase: { reverb.wet },
+                          setEffective: { reverb.wet = $0 }),
+            ]
         }
         return targets
     }

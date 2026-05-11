@@ -139,6 +139,47 @@ final class InstrumentTests: XCTestCase {
                        "After exactly one pattern, playhead should wrap back to 0")
     }
 
+    // MARK: - Reverb
+
+    func test_reverb_wet_zero_is_bypass() {
+        let rv = SimpleReverb(sampleRate: 48000)
+        rv.wet = 0
+        var l = [Float](repeating: 0.5, count: 128)
+        var r = [Float](repeating: -0.5, count: 128)
+        let lOriginal = l
+        let rOriginal = r
+        l.withUnsafeMutableBufferPointer { lp in
+            r.withUnsafeMutableBufferPointer { rp in
+                rv.process(left: lp.baseAddress!, right: rp.baseAddress!, count: 128)
+            }
+        }
+        XCTAssertEqual(l, lOriginal, "wet=0 must leave the dry signal untouched")
+        XCTAssertEqual(r, rOriginal)
+    }
+
+    func test_reverb_produces_tail_after_silence() {
+        // Feed a single impulse, then silence — the reverb tail
+        // should keep producing nonzero samples for many ms.
+        let rv = SimpleReverb(sampleRate: 48000)
+        rv.size = 0.8
+        rv.damp = 0.3
+        rv.wet = 1.0
+        var l = [Float](repeating: 0, count: 4800)
+        var r = [Float](repeating: 0, count: 4800)
+        l[0] = 1
+        r[0] = 1
+        l.withUnsafeMutableBufferPointer { lp in
+            r.withUnsafeMutableBufferPointer { rp in
+                rv.process(left: lp.baseAddress!, right: rp.baseAddress!, count: 4800)
+            }
+        }
+        // After ~50ms of silence following the impulse, samples
+        // should still be nonzero somewhere downstream.
+        let tail = l.suffix(2400)
+        let hasEnergy = tail.contains { abs($0) > 1e-4 }
+        XCTAssertTrue(hasEnergy, "reverb should keep ringing after a single impulse")
+    }
+
     // MARK: - E352 parser
 
     func test_bundled_voxsynth_parses_into_frames() throws {
