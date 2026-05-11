@@ -28,6 +28,11 @@ final class PadAudioPlayer: ObservableObject {
     @Published var volume: Float {
         didSet { applyEffectiveVolume() }
     }
+    /// Latest RMS of this pad's per-pad mixer node output — post-pad
+    /// volume + mute, BEFORE the master fader. Drives the channel VU
+    /// meters in the side strips so they bounce with content even
+    /// when the master is turned down or muted.
+    @Published private(set) var instantRMS: Float = 0
     /// Per-pad mute that overrides the mixer routing — when true, the
     /// pad contributes 0 to mainMixer regardless of channel routing or
     /// volume slider position. Toggled by the mute button on each pad
@@ -112,6 +117,17 @@ final class PadAudioPlayer: ObservableObject {
             engine.attach(mixerNode)
             engine.connect(playerNode, to: mixerNode, format: format)
             engine.connect(mixerNode, to: engine.mainMixerNode, format: nil)
+            // VU tap on the per-pad mixer: post pad-volume + pad-mute,
+            // pre-master. Lets the channel VU bounce with content
+            // regardless of master fader position.
+            mixerNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
+                guard let ch0 = buffer.floatChannelData?[0] else { return }
+                var sum: Float = 0
+                let n = Int(buffer.frameLength)
+                for i in 0..<n { sum += ch0[i] * ch0[i] }
+                let rms = sqrtf(sum / Float(max(1, n)))
+                Task { @MainActor [weak self] in self?.instantRMS = rms }
+            }
             applyEffectiveVolume()
             attachedFile = true
 

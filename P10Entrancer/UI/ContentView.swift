@@ -29,17 +29,20 @@ struct ContentView: View {
             // 20% so the master preview can take the rest. Same trim
             // applies in portrait and landscape — keeps aspect at 4:3
             // and the top preview from being squeezed.
-            let macroBarH: CGFloat = 64
-            let workHForGrid = workH - macroBarH
             let cellByWidth = w / 3
-            let cellByHeight = (workHForGrid * 0.78) / 4 * (4.0/3.0)
+            let cellByHeight = (workH * 0.78) / 4 * (4.0/3.0)
             let cellW = min(cellByWidth, cellByHeight) * 0.80
             let cellH = cellW * 3.0 / 4.0
             let gridW = cellW * 3
             let sourceH = cellH * 3
             let outputRowH = cellH
             let gridTotalH = sourceH + outputRowH
-            let outputH = max(80, workH - gridTotalH - macroBarH - 4) // 4 px for the dividers
+            let outputH = max(80, workH - gridTotalH - 2) // 2 px for the dividers
+            // Width of each side strip = half of whatever's left of the
+            // viewport after the grid centers itself horizontally. That's
+            // the empty vertical band the user wanted to reclaim — fits
+            // a macro card on top + a VU meter below.
+            let sideStripW = max(0, (w - gridW) / 2)
 
             VStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
@@ -52,30 +55,55 @@ struct ContentView: View {
 
                 Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
 
-                MacroLFOBar(engine: appState.lfoEngine, transport: appState.transport)
-                    .frame(height: macroBarH)
-                    .frame(maxWidth: .infinity)
-                    .background(.black)
-
-                Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-
-                PadGridView(pads: appState.pads, mixer: appState.mixer, liveRecordings: appState.liveRecordings, cameras: appState.cameras)
-                    .frame(width: gridW, height: sourceH)
-                    .frame(maxWidth: .infinity)
-                    .background(.black)
-
-                Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
-
-                OutputPadsRowView(
-                    keyerSystem: appState.keyerSystem,
-                    feedbackSystem: appState.feedbackSystem,
-                    mixer: appState.mixer,
-                    renderers: OutputPadRenderers(
-                        keyerRenderers: appState.keyerRenderers,
-                        feedbackRenderers: appState.feedbackRenderers
-                    )
-                )
-                .frame(width: gridW, height: outputRowH)
+                // 3-column work area: macro-1+CH1 VU | grid | macro-2+CH2 VU.
+                // Reclaims the previously-empty letterbox space on
+                // either side of the centered 4:3 grid.
+                HStack(spacing: 0) {
+                    if sideStripW > 60 {
+                        MacroSideStrip(
+                            macroSlotID: LFOTargets.slotID(forMacroIndex: 0),
+                            macroTitle: "MACRO 1",
+                            channelTitle: "CH1",
+                            channelAccent: .cyan,
+                            routedPad: routedPad(for: appState.mixer.ch1Source),
+                            engine: appState.lfoEngine,
+                            transport: appState.transport
+                        )
+                        .frame(width: sideStripW)
+                    } else {
+                        Spacer().frame(width: sideStripW)
+                    }
+                    VStack(spacing: 0) {
+                        PadGridView(pads: appState.pads, mixer: appState.mixer, liveRecordings: appState.liveRecordings, cameras: appState.cameras)
+                            .frame(width: gridW, height: sourceH)
+                        Rectangle().fill(Color.white.opacity(0.05)).frame(height: 1)
+                        OutputPadsRowView(
+                            keyerSystem: appState.keyerSystem,
+                            feedbackSystem: appState.feedbackSystem,
+                            mixer: appState.mixer,
+                            renderers: OutputPadRenderers(
+                                keyerRenderers: appState.keyerRenderers,
+                                feedbackRenderers: appState.feedbackRenderers
+                            )
+                        )
+                        .frame(width: gridW, height: outputRowH)
+                    }
+                    if sideStripW > 60 {
+                        MacroSideStrip(
+                            macroSlotID: LFOTargets.slotID(forMacroIndex: 1),
+                            macroTitle: "MACRO 2",
+                            channelTitle: "CH2",
+                            channelAccent: .orange,
+                            routedPad: routedPad(for: appState.mixer.ch2Source),
+                            engine: appState.lfoEngine,
+                            transport: appState.transport
+                        )
+                        .frame(width: sideStripW)
+                    } else {
+                        Spacer().frame(width: sideStripW)
+                    }
+                }
+                .frame(height: gridTotalH + 1)
                 .frame(maxWidth: .infinity)
                 .background(.black)
 
@@ -99,6 +127,18 @@ struct ContentView: View {
         }
         .ignoresSafeArea()
         .background(.black)
+    }
+
+    /// Resolves a channel's current source to the PadSlot whose
+    /// audioPlayer the VU meter should observe. For .pad it's
+    /// straightforward; for .keyer/.feedback the source pad isn't
+    /// audible in playback (no audio path) so we return nil and the
+    /// VU sits at zero.
+    private func routedPad(for source: ChannelSource) -> PadSlot? {
+        if case .pad(let i) = source, appState.pads.pads.indices.contains(i) {
+            return appState.pads.pads[i]
+        }
+        return nil
     }
 
     private var statusOverlay: some View {
