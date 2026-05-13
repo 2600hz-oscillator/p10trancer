@@ -31,3 +31,4 @@ Package.resolved
 # Bitwig extension Gradle outputs
 bridge/bitwig-extension/.gradle/
 bridge/bitwig-extension/build/
+scripts/__pycache__/

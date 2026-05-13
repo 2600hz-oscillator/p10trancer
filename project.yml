@@ -1,0 +1,93 @@
+name: P10Entrancer
+options:
+  bundleIdPrefix: com.p10entrancer
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  groupSortPosition: top
+  generateEmptyDirectories: true
+  defaultConfig: Debug
+  xcodeVersion: "15.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    TARGETED_DEVICE_FAMILY: "2"
+    SUPPORTS_MACCATALYST: NO
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  ffmpeg-kit-spm:
+    url: https://github.com/tylerjonesio/ffmpeg-kit-spm
+    branch: min.v5.1.2.6
+
+targets:
+  P10Entrancer:
+    type: application
+    platform: iOS
+    sources:
+      - path: P10Entrancer
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.p10entrancer.app
+        PRODUCT_NAME: P10Entrancer
+        INFOPLIST_FILE: P10Entrancer/Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        DEVELOPMENT_ASSET_PATHS: ""
+        SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        DEVELOPMENT_TEAM: PHY35R5456
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
+          SWIFT_COMPILATION_MODE: wholemodule
+    dependencies:
+      - package: ffmpeg-kit-spm
+        product: FFmpeg-Kit
+        embed: true
+        codeSign: true
+
+  P10EntrancerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: P10EntrancerTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.p10entrancer.app.tests
+        TARGETED_DEVICE_FAMILY: "2"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        GENERATE_INFOPLIST_FILE: YES
+        DEVELOPMENT_TEAM: PHY35R5456
+        CODE_SIGN_STYLE: Automatic
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/P10Entrancer.app/P10Entrancer
+        BUNDLE_LOADER: $(TEST_HOST)
+    dependencies:
+      - target: P10Entrancer
+
+schemes:
+  P10Entrancer:
+    build:
+      targets:
+        P10Entrancer: all
+        P10EntrancerTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - P10EntrancerTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
