@@ -105,7 +105,9 @@ final class MIDIOutputBindings {
             .sink { [weak self] source in
                 guard let self else { return }
                 self.muted = self.muted // explicit no-op for clarity
-                self.send([0xC0, Self.programChange(for: source), 0])
+                if case .pad(let i) = source {
+                    self.send([0xC0, UInt8(i + 1), 0])
+                }
             }
             .store(in: &cancellables)
         mixer.$ch2Source
@@ -113,7 +115,9 @@ final class MIDIOutputBindings {
             .dropFirst()
             .sink { [weak self] source in
                 guard let self else { return }
-                self.send([0xC0, Self.programChange(for: source), 0])
+                if case .pad(let i) = source {
+                    self.send([0xC0, UInt8(i + 1), 0])
+                }
             }
             .store(in: &cancellables)
         mixer.$activeChannel
@@ -178,22 +182,5 @@ final class MIDIOutputBindings {
     private func send(_ bytes: [UInt8]) {
         guard !muted else { return }
         sink?.send(bytes)
-    }
-
-    /// Program-change byte for an outgoing channel-source change.
-    /// Each channel source kind gets its own block of program numbers
-    /// so external gear can react to the full routing surface, not
-    /// just direct pad routings. Layout:
-    ///   1..9   pads      (1-indexed for legacy reasons; pad N → N)
-    ///   30..32 keyers    (keyer 0 → 30, keyer 1 → 31, ...)
-    ///   40..47 feedback  (feedback 0 → 40, ...)
-    ///   50..57 xyz       (xyz 0 → 50, xyz 1 → 51, ...)
-    private static func programChange(for source: ChannelSource) -> UInt8 {
-        switch source {
-        case .pad(let i):      return UInt8(min(127, max(0, i + 1)))
-        case .keyer(let i):    return UInt8(min(127, 30 + i))
-        case .feedback(let i): return UInt8(min(127, 40 + i))
-        case .xyz(let i):      return UInt8(min(127, 50 + i))
-        }
     }
 }

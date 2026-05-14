@@ -28,7 +28,6 @@ enum SessionCapture {
             )
         }
 
-        P10Logger.log("[SessionCapture] snapshot ch1=\(mixer.ch1Source) ch2=\(mixer.ch2Source)")
         let mixerSpec = SessionSpec.MixerSpec(
             ch1Source: encodeChannel(mixer.ch1Source),
             ch2Source: encodeChannel(mixer.ch2Source),
@@ -82,11 +81,8 @@ enum SessionCapture {
             }
         }
         // Mixer
-        let ch1 = decodeChannel(spec.mixer.ch1Source)
-        let ch2 = decodeChannel(spec.mixer.ch2Source)
-        P10Logger.log("[SessionCapture] apply ch1=\(ch1) ch2=\(ch2)")
-        appState.mixer.ch1Source = ch1
-        appState.mixer.ch2Source = ch2
+        appState.mixer.ch1Source = decodeChannel(spec.mixer.ch1Source)
+        appState.mixer.ch2Source = decodeChannel(spec.mixer.ch2Source)
         appState.mixer.activeChannel = ActiveChannel(rawValue: spec.mixer.activeChannel) ?? .ch1
         appState.mixer.transition = TransitionKind(rawValue: spec.mixer.transition) ?? .crossfade
         appState.mixer.position = spec.mixer.position
