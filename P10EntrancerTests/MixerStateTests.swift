@@ -10,8 +10,8 @@ final class MixerStateTests: XCTestCase {
         XCTAssertEqual(m.activeChannel, .ch1)
         XCTAssertEqual(m.ch1PadIndex, 0)
         XCTAssertEqual(m.ch2PadIndex, 1)
-        XCTAssertNil(m.ch1KeyerIndex)
-        XCTAssertNil(m.ch2KeyerIndex)
+        XCTAssertFalse(m.ch1IsKeyer)
+        XCTAssertFalse(m.ch2IsKeyer)
     }
 
     func test_routeActivePad_with_ch1_active_changes_ch1_only() {
@@ -49,25 +49,28 @@ final class MixerStateTests: XCTestCase {
 
     func test_routeKeyerTo_target_only() {
         let m = MixerState()
-        m.routeKeyerTo(.ch1, keyerIndex: 0)
-        XCTAssertEqual(m.ch1KeyerIndex, 0)
-        XCTAssertNil(m.ch2KeyerIndex)
+        m.routeKeyerTo(.ch1)
+        XCTAssertTrue(m.ch1IsKeyer)
+        XCTAssertFalse(m.ch2IsKeyer)
         XCTAssertNil(m.ch1PadIndex)
         XCTAssertEqual(m.ch2PadIndex, 1)
 
-        m.routeKeyerTo(.ch2, keyerIndex: 1)
-        XCTAssertEqual(m.ch1KeyerIndex, 0)
-        XCTAssertEqual(m.ch2KeyerIndex, 1)
+        m.routeKeyerTo(.ch2)
+        XCTAssertTrue(m.ch1IsKeyer)
+        XCTAssertTrue(m.ch2IsKeyer)
     }
 
-    func test_two_independent_keyers_in_channels() {
+    func test_atomic_fx_channel_sources_are_unindexed() {
+        // ChannelSource.keyer / .feedback / .xyz carry no payload —
+        // both channels routed to .keyer compare equal.
         let m = MixerState()
-        m.ch1Source = .keyer(0)
-        m.ch2Source = .keyer(1)
-        XCTAssertEqual(m.ch1KeyerIndex, 0)
-        XCTAssertEqual(m.ch2KeyerIndex, 1)
-        XCTAssertNotEqual(m.ch1Source, m.ch2Source,
-                          "Two keyer indices must be distinct ChannelSource values")
+        m.ch1Source = .keyer
+        m.ch2Source = .keyer
+        XCTAssertEqual(m.ch1Source, m.ch2Source)
+        m.ch2Source = .feedback
+        XCTAssertNotEqual(m.ch1Source, m.ch2Source)
+        m.ch2Source = .xyz
+        XCTAssertNotEqual(m.ch1Source, m.ch2Source)
     }
 
     func test_toggleActiveChannel_alternates() {
@@ -83,11 +86,11 @@ final class MixerStateTests: XCTestCase {
         let m = MixerState()
         m.ch1Source = .pad(4)
         XCTAssertEqual(m.ch1PadIndex, 4)
-        XCTAssertNil(m.ch1KeyerIndex)
+        XCTAssertFalse(m.ch1IsKeyer)
 
-        m.ch1Source = .keyer(1)
+        m.ch1Source = .keyer
         XCTAssertNil(m.ch1PadIndex)
-        XCTAssertEqual(m.ch1KeyerIndex, 1)
+        XCTAssertTrue(m.ch1IsKeyer)
     }
 
     func test_active_channel_independent_of_routing() {

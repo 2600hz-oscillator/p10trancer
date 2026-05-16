@@ -43,9 +43,8 @@ final class XYZState: ObservableObject {
 
 @MainActor
 final class XYZSystem: ObservableObject {
-    let units: [XYZState]
+    let unit: XYZState
     init() {
-        self.units = [XYZState(inputSource: .pad(0))]
+        self.unit = XYZState(inputSource: .pad(0))
     }
-    func unit(at i: Int) -> XYZState? { units.indices.contains(i) ? units[i] : nil }
 }

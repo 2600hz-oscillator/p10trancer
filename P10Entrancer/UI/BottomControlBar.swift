@@ -244,9 +244,9 @@ struct BottomControlBar: View {
         let sub: String
         switch source {
         case .pad(let i): sub = "PAD \(i + 1)"
-        case .keyer(let i): sub = "KEY\(i + 1)"
-        case .feedback(let i): sub = "FB\(i + 1)"
-        case .xyz(let i): sub = "XYZ\(i + 1)"
+        case .keyer: sub = "KEYER"
+        case .feedback: sub = "FB"
+        case .xyz: sub = "XYZ"
         }
         return Button(action: { mixer.activeChannel = channel }) {
             VStack(spacing: 2) {

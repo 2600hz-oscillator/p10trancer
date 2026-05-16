@@ -6,7 +6,6 @@ import SwiftUI
 /// default surface stays clean.
 struct XYZSettingsSheet: View {
     @ObservedObject var state: XYZState
-    let xyzIndex: Int
     @Environment(\.dismiss) private var dismiss
     @State private var showLFO = false
     @State private var advancedOpen = false
@@ -14,7 +13,7 @@ struct XYZSettingsSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("XYZ \(xyzIndex + 1)")
+                Text("XYZ")
                     .font(.system(size: 14, weight: .heavy, design: .monospaced))
                     .foregroundStyle(.white).tracking(2.0)
                 Spacer()
@@ -36,9 +35,7 @@ struct XYZSettingsSheet: View {
                     SourcePicker(
                         label: "INPUT (Z)",
                         source: $state.inputSource,
-                        editingKeyerIndex: nil,
-                        editingXYZIndex: xyzIndex,
-                        allowFeedback: true
+                        hideXYZ: true
                     )
 
                     shapeRow(label: "X SHAPE", binding: $state.xShape)
@@ -75,9 +72,9 @@ struct XYZSettingsSheet: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showLFO) {
             LFOSettingsSheet(
-                title: "XYZ \(xyzIndex + 1)",
-                lfo: AppState.shared.lfoEngine.lfo(for: LFOTargets.slotID(forXYZIndex: xyzIndex)),
-                availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: LFOTargets.slotID(forXYZIndex: xyzIndex)),
+                title: "XYZ",
+                lfo: AppState.shared.lfoEngine.lfo(for: LFOTargets.xyzSlotID),
+                availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: LFOTargets.xyzSlotID),
                 transport: AppState.shared.transport
             )
         }

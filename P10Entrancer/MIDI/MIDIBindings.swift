@@ -128,23 +128,26 @@ final class MIDIBindings {
             mixer.routeKeyerTo(.ch1)
         case 20:
             mixer.routeKeyerTo(.ch2)
+        // Note: PC 40-42 / 50-52 below are the explicit ch1/ch2 → keyer/
+        // feedback/xyz routing emitted by MIDIOutputBindings on user
+        // gestures so automation can round-trip them.
         case 21:
             recorder?.toggle()
         case 22...30:
             // Select which pad subsequent FX-param CCs (23-34) target.
             mixer.inspectedPadIndex = program - 22
         case 40:
-            mixer.ch1Source = .keyer(0)
+            mixer.ch1Source = .keyer
         case 41:
-            mixer.ch1Source = .feedback(0)
+            mixer.ch1Source = .feedback
         case 42:
-            mixer.ch1Source = .xyz(0)
+            mixer.ch1Source = .xyz
         case 50:
-            mixer.ch2Source = .keyer(0)
+            mixer.ch2Source = .keyer
         case 51:
-            mixer.ch2Source = .feedback(0)
+            mixer.ch2Source = .feedback
         case 52:
-            mixer.ch2Source = .xyz(0)
+            mixer.ch2Source = .xyz
         default:
             break
         }

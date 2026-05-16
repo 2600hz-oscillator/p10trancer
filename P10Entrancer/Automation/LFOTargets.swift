@@ -149,42 +149,41 @@ enum LFOTargets {
 
     // MARK: - Per keyer pad
 
-    /// Targets on a keyer's params. Source pickers (FG/BG) aren't
-    /// modulatable; their values are discrete enums, not floats.
-    static func forKeyer(index: Int, state: KeyerState) -> [LFOTarget] {
-        let label = "KEYER \(index + 1)"
+    /// Targets on the atomic keyer's params. Source pickers (FG/BG)
+    /// aren't modulatable; their values are discrete enums, not floats.
+    static func forKeyer(state: KeyerState) -> [LFOTarget] {
         return [
             LFOTarget(
-                id: "keyer.\(index).threshold",
-                displayName: "\(label): Threshold",
+                id: "keyer.threshold",
+                displayName: "KEYER: Threshold",
                 range: 0...1,
                 getBase: { state.threshold },
                 setEffective: { state.threshold = $0 }
             ),
             LFOTarget(
-                id: "keyer.\(index).softness",
-                displayName: "\(label): Softness",
+                id: "keyer.softness",
+                displayName: "KEYER: Softness",
                 range: 0.001...0.5,
                 getBase: { state.softness },
                 setEffective: { state.softness = $0 }
             ),
             LFOTarget(
-                id: "keyer.\(index).keyColorR",
-                displayName: "\(label): Key R",
+                id: "keyer.keyColorR",
+                displayName: "KEYER: Key R",
                 range: 0...1,
                 getBase: { state.keyColor.x },
                 setEffective: { state.keyColor = SIMD3($0, state.keyColor.y, state.keyColor.z) }
             ),
             LFOTarget(
-                id: "keyer.\(index).keyColorG",
-                displayName: "\(label): Key G",
+                id: "keyer.keyColorG",
+                displayName: "KEYER: Key G",
                 range: 0...1,
                 getBase: { state.keyColor.y },
                 setEffective: { state.keyColor = SIMD3(state.keyColor.x, $0, state.keyColor.z) }
             ),
             LFOTarget(
-                id: "keyer.\(index).keyColorB",
-                displayName: "\(label): Key B",
+                id: "keyer.keyColorB",
+                displayName: "KEYER: Key B",
                 range: 0...1,
                 getBase: { state.keyColor.z },
                 setEffective: { state.keyColor = SIMD3(state.keyColor.x, state.keyColor.y, $0) }
@@ -231,46 +230,45 @@ enum LFOTargets {
         ]
     }
 
-    // MARK: - Per XYZ unit
+    // MARK: - Atomic XYZ unit
 
-    static func forXYZ(index: Int, state: XYZState) -> [LFOTarget] {
-        let label = "XYZ \(index + 1)"
+    static func forXYZ(state: XYZState) -> [LFOTarget] {
         return [
-            LFOTarget(id: "xyz.\(index).xShape",
-                      displayName: "\(label): X Shape", range: 0...1,
+            LFOTarget(id: "xyz.xShape",
+                      displayName: "XYZ: X Shape", range: 0...1,
                       getBase: { state.xShape }, setEffective: { state.xShape = $0 }),
-            LFOTarget(id: "xyz.\(index).yShape",
-                      displayName: "\(label): Y Shape", range: 0...1,
+            LFOTarget(id: "xyz.yShape",
+                      displayName: "XYZ: Y Shape", range: 0...1,
                       getBase: { state.yShape }, setEffective: { state.yShape = $0 }),
-            LFOTarget(id: "xyz.\(index).xDisp",
-                      displayName: "\(label): X Disp", range: -1...1,
+            LFOTarget(id: "xyz.xDisp",
+                      displayName: "XYZ: X Disp", range: -1...1,
                       getBase: { state.xDisp }, setEffective: { state.xDisp = $0 }),
-            LFOTarget(id: "xyz.\(index).yDisp",
-                      displayName: "\(label): Y Disp", range: -1...1,
+            LFOTarget(id: "xyz.yDisp",
+                      displayName: "XYZ: Y Disp", range: -1...1,
                       getBase: { state.yDisp }, setEffective: { state.yDisp = $0 }),
-            LFOTarget(id: "xyz.\(index).intensity",
-                      displayName: "\(label): Intensity", range: 0...2,
+            LFOTarget(id: "xyz.intensity",
+                      displayName: "XYZ: Intensity", range: 0...2,
                       getBase: { state.intensity }, setEffective: { state.intensity = $0 }),
-            LFOTarget(id: "xyz.\(index).tintR",
-                      displayName: "\(label): Tint R", range: 0...1,
+            LFOTarget(id: "xyz.tintR",
+                      displayName: "XYZ: Tint R", range: 0...1,
                       getBase: { state.tintR }, setEffective: { state.tintR = $0 }),
-            LFOTarget(id: "xyz.\(index).tintG",
-                      displayName: "\(label): Tint G", range: 0...1,
+            LFOTarget(id: "xyz.tintG",
+                      displayName: "XYZ: Tint G", range: 0...1,
                       getBase: { state.tintG }, setEffective: { state.tintG = $0 }),
-            LFOTarget(id: "xyz.\(index).tintB",
-                      displayName: "\(label): Tint B", range: 0...1,
+            LFOTarget(id: "xyz.tintB",
+                      displayName: "XYZ: Tint B", range: 0...1,
                       getBase: { state.tintB }, setEffective: { state.tintB = $0 }),
-            LFOTarget(id: "xyz.\(index).xFreq",
-                      displayName: "\(label): X Freq", range: 0.25...8,
+            LFOTarget(id: "xyz.xFreq",
+                      displayName: "XYZ: X Freq", range: 0.25...8,
                       getBase: { state.xFreq }, setEffective: { state.xFreq = $0 }),
-            LFOTarget(id: "xyz.\(index).yFreq",
-                      displayName: "\(label): Y Freq", range: 0.25...8,
+            LFOTarget(id: "xyz.yFreq",
+                      displayName: "XYZ: Y Freq", range: 0.25...8,
                       getBase: { state.yFreq }, setEffective: { state.yFreq = $0 }),
-            LFOTarget(id: "xyz.\(index).xPhase",
-                      displayName: "\(label): X Phase", range: 0...1,
+            LFOTarget(id: "xyz.xPhase",
+                      displayName: "XYZ: X Phase", range: 0...1,
                       getBase: { state.xPhase }, setEffective: { state.xPhase = $0 }),
-            LFOTarget(id: "xyz.\(index).yPhase",
-                      displayName: "\(label): Y Phase", range: 0...1,
+            LFOTarget(id: "xyz.yPhase",
+                      displayName: "XYZ: Y Phase", range: 0...1,
                       getBase: { state.yPhase }, setEffective: { state.yPhase = $0 })
         ]
     }
@@ -302,8 +300,8 @@ enum LFOTargets {
     static func slotID(forPadIndex i: Int, lfoIndex k: Int) -> String {
         k == 0 ? "pad-\(i)" : "pad-\(i)-lfo-\(k)"
     }
-    static func slotID(forKeyerIndex i: Int) -> String { "keyer-\(i)" }
+    static let keyerSlotID = "keyer"
     static let feedbackSlotID = "feedback"
-    static func slotID(forXYZIndex i: Int) -> String { "xyz-\(i)" }
+    static let xyzSlotID = "xyz"
     static func slotID(forMacroIndex i: Int) -> String { "macro-\(i)" }
 }

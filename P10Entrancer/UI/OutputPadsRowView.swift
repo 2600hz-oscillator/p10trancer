@@ -1,9 +1,11 @@
 import SwiftUI
 import MetalKit
 
-/// Bottom row of three fixed FX pads: KEYER, FEEDBACK, XYZ. Each slot
-/// is permanent — the gear icon opens that slot's settings sheet
-/// directly, and the waveform icon opens the per-slot LFO sheet.
+/// Bottom row of three atomic FX pads: KEYER, FEEDBACK, XYZ. Each
+/// slot is permanently bound to one FX type — there is no instance
+/// index and no way to retype the slot. The gear icon opens that
+/// FX type's settings sheet directly; the waveform icon opens the
+/// per-slot LFO sheet.
 struct OutputPadsRowView: View {
     let keyerSystem: KeyerSystem
     let feedbackSystem: FeedbackSystem
@@ -28,13 +30,13 @@ struct OutputPadsRowView: View {
     }
 }
 
-/// Holds the renderers so OutputPadsRowView can hand them to each cell
-/// (which uses them to construct an MTKView previewing the unit's
-/// output texture).
+/// Holds the three renderers so OutputPadsRowView can hand them to
+/// each cell (which uses them to construct an MTKView previewing the
+/// unit's output texture).
 struct OutputPadRenderers {
-    let keyerRenderers: [KeyerRenderer]
-    let feedbackRenderers: [FeedbackRenderer]
-    let xyzRenderers: [XYZRenderer]
+    let keyer: KeyerRenderer
+    let feedback: FeedbackRenderer
+    let xyz: XYZRenderer
 }
 
 private struct OutputPadCell: View {
@@ -89,8 +91,6 @@ private struct OutputPadCell: View {
                             .padding(.top, 6)
                     }
                     Spacer()
-                    // Per-slot LFO sheet — same waveform icon as on
-                    // the video pads above.
                     Button { lfoPresented = true } label: {
                         Image(systemName: "waveform.path.ecg")
                             .font(.system(size: 12, weight: .bold))
@@ -143,23 +143,11 @@ private struct OutputPadCell: View {
     private func preview(kind: FXPadKind) -> some View {
         switch kind {
         case .keyer:
-            if let r = renderers.keyerRenderers[safe: 0] {
-                OutputTexturePreview(texture: { r.outputTexture })
-            } else {
-                Color.black
-            }
+            OutputTexturePreview(texture: { renderers.keyer.outputTexture })
         case .feedback:
-            if let r = renderers.feedbackRenderers[safe: 0] {
-                OutputTexturePreview(texture: { r.outputTexture })
-            } else {
-                Color.black
-            }
+            OutputTexturePreview(texture: { renderers.feedback.outputTexture })
         case .xyz:
-            if let r = renderers.xyzRenderers[safe: 0] {
-                OutputTexturePreview(texture: { r.outputTexture })
-            } else {
-                Color.black
-            }
+            OutputTexturePreview(texture: { renderers.xyz.outputTexture })
         }
     }
 
@@ -167,23 +155,11 @@ private struct OutputPadCell: View {
     private func outputPadSettings(for kind: FXPadKind) -> some View {
         switch kind {
         case .keyer:
-            if let state = keyerSystem.keyer(at: 0) {
-                KeyerSettingsSheet(keyer: state, keyerIndex: 0)
-            }
+            KeyerSettingsSheet(keyer: keyerSystem.keyer)
         case .feedback:
-            if let state = feedbackSystem.unit(at: 0) {
-                FeedbackSettingsSheet(state: state)
-            }
+            FeedbackSettingsSheet(state: feedbackSystem.unit)
         case .xyz:
-            if let state = xyzSystem.unit(at: 0) {
-                XYZSettingsSheet(state: state, xyzIndex: 0)
-            }
+            XYZSettingsSheet(state: xyzSystem.unit)
         }
-    }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }

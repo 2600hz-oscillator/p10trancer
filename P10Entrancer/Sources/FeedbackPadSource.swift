@@ -1,16 +1,15 @@
 import Metal
 import QuartzCore
 
-/// Lets a pad use a feedback unit's output as its source. The unit's source
-/// pad and zoom/pan/tilt are configured on `FeedbackState` directly. This
-/// source just forwards the renderer's current output texture.
+/// Lets a regular source pad use the atomic feedback unit's output as
+/// its source. Configuration (input pad, zoom/pan/tilt/decay/etc.)
+/// lives on `FeedbackState`; this source just forwards the renderer's
+/// current output texture.
 @MainActor
 final class FeedbackPadSource: PadSource {
-    let feedbackIndex: Int
     private let renderer: FeedbackRenderer
 
-    init(feedbackIndex: Int, renderer: FeedbackRenderer) {
-        self.feedbackIndex = feedbackIndex
+    init(renderer: FeedbackRenderer) {
         self.renderer = renderer
     }
 

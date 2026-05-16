@@ -1,25 +1,25 @@
 import Foundation
 
-/// Identifies an input source for a keyer/feedback unit. Lets those
-/// "output pads" (KEYER1, KEYER2, FEEDBACK) reference each other or
-/// any of the regular pads, instead of going through a regular pad
-/// hosting a KeyerPadSource/FeedbackPadSource.
+/// Identifies an input source for one of the atomic FX pads
+/// (KEYER / FEEDBACK / XYZ). Lets those FX pads reference each other
+/// or any of the nine source pads. Each FX type is a single instance,
+/// so there is no index on .keyer/.feedback/.xyz.
 ///
-/// When a renderer reads a `.keyer` or `.feedback` reference, it sees
-/// that unit's last-published output texture — naturally one frame
-/// behind, which is exactly the right behavior for cycles.
+/// When a renderer reads a `.keyer` / `.feedback` / `.xyz` reference,
+/// it sees that unit's last-published output texture — naturally one
+/// frame behind, which is the right behavior for cycles.
 enum SourceRef: Equatable, Codable {
-    case pad(Int)        // 0..<PadSystem.padCount
-    case keyer(Int)      // 0 (Keyer 1) or 1 (Keyer 2)
-    case feedback        // single feedback unit (post-MVP refactor)
-    case xyz(Int)        // 0..2 = XYZ Rutt-Etra units
+    case pad(Int)
+    case keyer
+    case feedback
+    case xyz
 
     var displayLabel: String {
         switch self {
         case .pad(let i): return "PAD \(i + 1)"
-        case .keyer(let i): return "KEYER \(i + 1)"
+        case .keyer: return "KEYER"
         case .feedback: return "FEEDBACK"
-        case .xyz(let i): return "XYZ \(i + 1)"
+        case .xyz: return "XYZ"
         }
     }
 }

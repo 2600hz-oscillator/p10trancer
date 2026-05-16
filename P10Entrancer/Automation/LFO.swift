@@ -150,7 +150,7 @@ final class LFOEngine: ObservableObject {
     }
 
     /// Lookup or create the LFO state for a given slot. Slot keys:
-    ///   pad-0..pad-8, keyer-0, keyer-1, feedback, macro-0, macro-1
+    ///   pad-0..pad-8, keyer, feedback, xyz, macro-0, macro-1
     func lfo(for slotID: String) -> LFOState {
         if let existing = lfos[slotID] { return existing }
         let s = LFOState()
@@ -182,12 +182,10 @@ final class LFOEngine: ObservableObject {
         let prefix: String
         if slotID == "feedback" {
             prefix = "feedback."
-        } else if slotID.hasPrefix("keyer-"),
-                  let i = Int(slotID.dropFirst("keyer-".count)) {
-            prefix = "keyer.\(i)."
-        } else if slotID.hasPrefix("xyz-"),
-                  let i = Int(slotID.dropFirst("xyz-".count)) {
-            prefix = "xyz.\(i)."
+        } else if slotID == "keyer" {
+            prefix = "keyer."
+        } else if slotID == "xyz" {
+            prefix = "xyz."
         } else if slotID.hasPrefix("pad-") {
             // Pad slot IDs come in two shapes:
             //   pad-N             — LFO 1 (legacy/default)

@@ -4,18 +4,13 @@ struct KeyerControlsView: View {
     @ObservedObject var system: KeyerSystem
     @ObservedObject var mixer: MixerState
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedKeyer: Int = 0
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-            picker
-            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
             ScrollView {
-                if let keyer = system.keyer(at: selectedKeyer) {
-                    KeyerEditor(keyerIndex: selectedKeyer, keyer: keyer, mixer: mixer)
-                }
+                KeyerEditor(keyer: system.keyer, mixer: mixer)
             }
         }
         .background(.black)
@@ -24,7 +19,7 @@ struct KeyerControlsView: View {
 
     private var header: some View {
         HStack {
-            Text("KEYER CONTROLS")
+            Text("KEYER")
                 .font(.system(size: 14, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white)
                 .tracking(2.0)
@@ -36,27 +31,9 @@ struct KeyerControlsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
-
-    private var picker: some View {
-        HStack(spacing: 0) {
-            ForEach(system.keyers.indices, id: \.self) { i in
-                Button(action: { selectedKeyer = i }) {
-                    Text("KEYER \(i + 1)")
-                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 38)
-                        .foregroundStyle(selectedKeyer == i ? .black : .white)
-                        .background(selectedKeyer == i ? Color.green : Color.white.opacity(0.06))
-                        .overlay(Rectangle().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
 }
 
 private struct KeyerEditor: View {
-    let keyerIndex: Int
     @ObservedObject var keyer: KeyerState
     @ObservedObject var mixer: MixerState
 
@@ -81,11 +58,11 @@ private struct KeyerEditor: View {
     private func routeButton(channel: ActiveChannel, label: String, tint: Color) -> some View {
         let active: Bool = {
             switch channel {
-            case .ch1: return mixer.ch1KeyerIndex == keyerIndex
-            case .ch2: return mixer.ch2KeyerIndex == keyerIndex
+            case .ch1: return mixer.ch1IsKeyer
+            case .ch2: return mixer.ch2IsKeyer
             }
         }()
-        return Button(action: { mixer.routeKeyerTo(channel, keyerIndex: keyerIndex) }) {
+        return Button(action: { mixer.routeKeyerTo(channel) }) {
             Text(label)
                 .font(.system(size: 12, weight: .heavy, design: .monospaced))
                 .foregroundStyle(active ? .black : .white)

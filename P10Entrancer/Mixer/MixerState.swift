@@ -6,11 +6,14 @@ enum ActiveChannel: Int {
     case ch2 = 1
 }
 
+/// A channel can show one of the nine source pads, or it can show the
+/// output of one of the three atomic FX pads (KEYER / FEEDBACK / XYZ).
+/// There's exactly one of each FX type — no instance index.
 enum ChannelSource: Equatable {
     case pad(Int)
-    case keyer(Int)    // 0 = Keyer 1, 1 = Keyer 2
-    case feedback(Int) // 0 = FB 1 (only one unit today)
-    case xyz(Int)      // 0..2 = XYZ Rutt-Etra units
+    case keyer
+    case feedback
+    case xyz
 }
 
 enum OutputMode: Int, CaseIterable, Identifiable {
@@ -74,26 +77,17 @@ final class MixerState: ObservableObject {
         if case .pad(let i) = ch2Source { return i } else { return nil }
     }
 
-    var ch1KeyerIndex: Int? {
-        if case .keyer(let i) = ch1Source { return i } else { return nil }
-    }
+    var ch1IsKeyer: Bool { ch1Source == .keyer }
+    var ch2IsKeyer: Bool { ch2Source == .keyer }
+    var ch1IsFeedback: Bool { ch1Source == .feedback }
+    var ch2IsFeedback: Bool { ch2Source == .feedback }
+    var ch1IsXYZ: Bool { ch1Source == .xyz }
+    var ch2IsXYZ: Bool { ch2Source == .xyz }
 
-    var ch2KeyerIndex: Int? {
-        if case .keyer(let i) = ch2Source { return i } else { return nil }
-    }
-
-    var ch1FeedbackIndex: Int? {
-        if case .feedback(let i) = ch1Source { return i } else { return nil }
-    }
-
-    var ch2FeedbackIndex: Int? {
-        if case .feedback(let i) = ch2Source { return i } else { return nil }
-    }
-
-    func routeFeedbackTo(_ channel: ActiveChannel, feedbackIndex: Int = 0) {
+    func routeFeedbackTo(_ channel: ActiveChannel) {
         switch channel {
-        case .ch1: ch1Source = .feedback(feedbackIndex)
-        case .ch2: ch2Source = .feedback(feedbackIndex)
+        case .ch1: ch1Source = .feedback
+        case .ch2: ch2Source = .feedback
         }
     }
 
@@ -104,10 +98,10 @@ final class MixerState: ObservableObject {
         }
     }
 
-    func routeKeyerTo(_ channel: ActiveChannel, keyerIndex: Int = 0) {
+    func routeKeyerTo(_ channel: ActiveChannel) {
         switch channel {
-        case .ch1: ch1Source = .keyer(keyerIndex)
-        case .ch2: ch2Source = .keyer(keyerIndex)
+        case .ch1: ch1Source = .keyer
+        case .ch2: ch2Source = .keyer
         }
     }
 

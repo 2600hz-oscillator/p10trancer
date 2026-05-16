@@ -67,18 +67,13 @@ final class FeedbackState: ObservableObject {
     }
 }
 
-/// Holds the single feedback unit. Kept as a system rather than a bare
-/// state so call sites that loop over units (MIDI, sessions) don't have
-/// to special-case a single instance.
+/// Owns the single atomic feedback unit. Wrapped as a "system" so the
+/// object can be re-bound via @ObservedObject in SwiftUI views.
 @MainActor
 final class FeedbackSystem: ObservableObject {
-    let units: [FeedbackState]
+    let unit: FeedbackState
 
     init() {
-        self.units = [FeedbackState(inputSource: .pad(0))]
-    }
-
-    func unit(at index: Int) -> FeedbackState? {
-        units.indices.contains(index) ? units[index] : nil
+        self.unit = FeedbackState(inputSource: .pad(0))
     }
 }

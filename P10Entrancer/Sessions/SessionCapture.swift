@@ -17,7 +17,8 @@ enum SessionCapture {
             padSpecs.append(snapshotPad(at: i, pad: pad, cameras: cameras))
         }
 
-        let keyerSpecs = keyerSystem.keyers.map { k in
+        let k = keyerSystem.keyer
+        let keyerSpecs = [
             SessionSpec.KeyerSpec(
                 foregroundPadIndex: k.foregroundPadIndex,
                 backgroundPadIndex: k.backgroundPadIndex,
@@ -26,7 +27,7 @@ enum SessionCapture {
                 softness: k.softness,
                 keyColor: [k.keyColor.x, k.keyColor.y, k.keyColor.z]
             )
-        }
+        ]
 
         let mixerSpec = SessionSpec.MixerSpec(
             ch1Source: encodeChannel(mixer.ch1Source),
@@ -68,9 +69,11 @@ enum SessionCapture {
         for padSpec in spec.pads {
             applyPad(padSpec, appState: appState)
         }
-        // Keyers
-        for (i, keyerSpec) in spec.keyers.enumerated() {
-            guard let k = appState.keyerSystem.keyer(at: i) else { continue }
+        // Keyer — only the first KeyerSpec is applied. Legacy sessions
+        // with multiple keyers fall through; their extra entries are
+        // ignored since the FX surface is now atomic.
+        if let keyerSpec = spec.keyers.first {
+            let k = appState.keyerSystem.keyer
             k.foregroundPadIndex = keyerSpec.foregroundPadIndex
             k.backgroundPadIndex = keyerSpec.backgroundPadIndex
             k.kind = KeyerKind(rawValue: keyerSpec.kind) ?? .chroma
@@ -117,7 +120,6 @@ enum SessionCapture {
         var bundledIndex: Int? = nil
         var userVideoBasename: String? = nil
         var cameraID: String? = nil
-        var keyerIndex: Int? = nil
         if let source = pad.source {
             if let v = source as? VideoFileSource {
                 if let bundleIdx = bundledPadIndex(for: v.url) {
@@ -132,9 +134,8 @@ enum SessionCapture {
             } else if let id = cameras.deviceID(for: source) {
                 kind = .camera
                 cameraID = id
-            } else if let k = source as? KeyerPadSource {
+            } else if source is KeyerPadSource {
                 kind = .keyer
-                keyerIndex = k.keyerIndex
             } else if source is MasterFeedbackSource {
                 kind = .masterFeedback
             } else {
@@ -149,7 +150,7 @@ enum SessionCapture {
             bundledIndex: bundledIndex,
             userVideoBasename: userVideoBasename,
             cameraID: cameraID,
-            keyerIndex: keyerIndex,
+            keyerIndex: nil,
             fx: fxSpec
         )
     }
@@ -181,9 +182,7 @@ enum SessionCapture {
                 appState.setCameraSource(deviceID: id, at: i)
             }
         case .keyer:
-            if let kIdx = spec.keyerIndex {
-                appState.setKeyerSource(keyerIndex: kIdx, at: i)
-            }
+            appState.setKeyerSource(at: i)
         case .masterFeedback:
             appState.setMasterFeedbackSource(at: i)
         case .empty:
@@ -202,20 +201,23 @@ enum SessionCapture {
     }
 
     private static func encodeChannel(_ source: ChannelSource) -> SessionSpec.MixerSpec.Source {
+        // `index` is kept in the on-disk schema for back-compat with
+        // existing saved sessions; for non-pad sources it's now always
+        // zero and ignored on read.
         switch source {
-        case .pad(let i):       return .init(kind: .pad, index: i)
-        case .keyer(let i):     return .init(kind: .keyer, index: i)
-        case .feedback(let i):  return .init(kind: .feedback, index: i)
-        case .xyz(let i):       return .init(kind: .xyz, index: i)
+        case .pad(let i):  return .init(kind: .pad, index: i)
+        case .keyer:       return .init(kind: .keyer, index: 0)
+        case .feedback:    return .init(kind: .feedback, index: 0)
+        case .xyz:         return .init(kind: .xyz, index: 0)
         }
     }
 
     private static func decodeChannel(_ source: SessionSpec.MixerSpec.Source) -> ChannelSource {
         switch source.kind {
         case .pad:      return .pad(source.index)
-        case .keyer:    return .keyer(source.index)
-        case .feedback: return .feedback(source.index)
-        case .xyz:      return .xyz(source.index)
+        case .keyer:    return .keyer
+        case .feedback: return .feedback
+        case .xyz:      return .xyz
         }
     }
 

@@ -67,20 +67,14 @@ final class KeyerState: ObservableObject {
     }
 }
 
-/// Holds the single canonical keyer. Kept as a "system" so call sites
-/// that loop over keyers (MIDI, sessions, renderers) don't have to
-/// special-case the one-instance shape.
+/// Owns the single atomic keyer state. Wrapped as a "system" so the
+/// object can be re-bound via @ObservedObject in SwiftUI views without
+/// re-creating the underlying state.
 @MainActor
 final class KeyerSystem: ObservableObject {
-    let keyers: [KeyerState]
+    let keyer: KeyerState
 
     init() {
-        self.keyers = [
-            KeyerState(foregroundSource: .pad(6), backgroundSource: .pad(7))
-        ]
-    }
-
-    func keyer(at index: Int) -> KeyerState? {
-        keyers.indices.contains(index) ? keyers[index] : nil
+        self.keyer = KeyerState(foregroundSource: .pad(6), backgroundSource: .pad(7))
     }
 }

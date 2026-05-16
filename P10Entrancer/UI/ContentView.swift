@@ -84,9 +84,9 @@ struct ContentView: View {
                             fxPadSystem: appState.fxPadSystem,
                             mixer: appState.mixer,
                             renderers: OutputPadRenderers(
-                                keyerRenderers: appState.keyerRenderers,
-                                feedbackRenderers: appState.feedbackRenderers,
-                                xyzRenderers: appState.xyzRenderers
+                                keyer: appState.keyerRenderer,
+                                feedback: appState.feedbackRenderer,
+                                xyz: appState.xyzRenderer
                             )
                         )
                         .frame(width: gridW, height: outputRowH)
@@ -143,13 +143,12 @@ struct ContentView: View {
         switch source {
         case .pad(let i):
             padIndex = i
-        case .keyer(let i):
-            padIndex = appState.keyerSystem.keyer(at: i)?.foregroundPadIndex
-        case .feedback(let i):
-            padIndex = appState.feedbackSystem.unit(at: i)?.sourcePadIndex
-        case .xyz(let i):
-            if let x = appState.xyzSystem.unit(at: i),
-               case .pad(let p) = x.inputSource {
+        case .keyer:
+            padIndex = appState.keyerSystem.keyer.foregroundPadIndex
+        case .feedback:
+            padIndex = appState.feedbackSystem.unit.sourcePadIndex
+        case .xyz:
+            if case .pad(let p) = appState.xyzSystem.unit.inputSource {
                 padIndex = p
             } else {
                 padIndex = nil

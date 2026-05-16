@@ -4,18 +4,13 @@ struct FeedbackControlsView: View {
     @ObservedObject var system: FeedbackSystem
     @ObservedObject var mixer: MixerState
     @Environment(\.dismiss) private var dismiss
-    @State private var selected: Int = 0
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
-            picker
-            Rectangle().fill(Color.white.opacity(0.1)).frame(height: 1)
             ScrollView {
-                if let unit = system.unit(at: selected) {
-                    FeedbackEditor(index: selected, state: unit, mixer: mixer)
-                }
+                FeedbackEditor(state: system.unit, mixer: mixer)
             }
         }
         .background(.black)
@@ -24,7 +19,7 @@ struct FeedbackControlsView: View {
 
     private var header: some View {
         HStack {
-            Text("FEEDBACK CONTROLS")
+            Text("FEEDBACK")
                 .font(.system(size: 14, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white)
                 .tracking(2.0)
@@ -36,27 +31,9 @@ struct FeedbackControlsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
-
-    private var picker: some View {
-        HStack(spacing: 0) {
-            ForEach(system.units.indices, id: \.self) { i in
-                Button(action: { selected = i }) {
-                    Text("FB \(i + 1)")
-                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 38)
-                        .foregroundStyle(selected == i ? .black : .white)
-                        .background(selected == i ? Color.purple : Color.white.opacity(0.06))
-                        .overlay(Rectangle().strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
 }
 
 private struct FeedbackEditor: View {
-    let index: Int
     @ObservedObject var state: FeedbackState
     @ObservedObject var mixer: MixerState
 
@@ -85,11 +62,11 @@ private struct FeedbackEditor: View {
     private func routeButton(channel: ActiveChannel, label: String, tint: Color) -> some View {
         let active: Bool = {
             switch channel {
-            case .ch1: return mixer.ch1FeedbackIndex == index
-            case .ch2: return mixer.ch2FeedbackIndex == index
+            case .ch1: return mixer.ch1IsFeedback
+            case .ch2: return mixer.ch2IsFeedback
             }
         }()
-        return Button(action: { mixer.routeFeedbackTo(channel, feedbackIndex: index) }) {
+        return Button(action: { mixer.routeFeedbackTo(channel) }) {
             Text(label)
                 .font(.system(size: 12, weight: .heavy, design: .monospaced))
                 .foregroundStyle(active ? .black : .white)

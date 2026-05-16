@@ -8,9 +8,9 @@ final class MasterMixerOffscreen: FrameRenderer {
     private let context = MetalContext.shared
     private let pads: PadSystem
     private let mixer: MixerState
-    private let keyers: [KeyerRenderer]
-    private let feedbacks: [FeedbackRenderer]
-    private let xyzs: [XYZRenderer]
+    let keyer: KeyerRenderer
+    let feedback: FeedbackRenderer
+    let xyz: XYZRenderer
     private let ntscPipeline: NTSCPipeline
     private let pipeline: MTLRenderPipelineState
     weak var recorder: MixerRecorder?
@@ -20,15 +20,15 @@ final class MasterMixerOffscreen: FrameRenderer {
 
     init(pads: PadSystem,
          mixer: MixerState,
-         keyers: [KeyerRenderer],
-         feedbacks: [FeedbackRenderer],
-         xyzs: [XYZRenderer],
+         keyer: KeyerRenderer,
+         feedback: FeedbackRenderer,
+         xyz: XYZRenderer,
          ntscPipeline: NTSCPipeline) throws {
         self.pads = pads
         self.mixer = mixer
-        self.keyers = keyers
-        self.feedbacks = feedbacks
-        self.xyzs = xyzs
+        self.keyer = keyer
+        self.feedback = feedback
+        self.xyz = xyz
         self.ntscPipeline = ntscPipeline
         self.pipeline = try context.makePipeline(
             vertex: "mixerVertex",
@@ -45,19 +45,17 @@ final class MasterMixerOffscreen: FrameRenderer {
             case .pad(let i):
                 guard self.pads.pads.indices.contains(i) else { return nil }
                 return self.pads.pads[i].texture
-            case .keyer(let i):
-                guard self.keyers.indices.contains(i) else { return nil }
-                return self.keyers[i].outputTexture
+            case .keyer:
+                return self.keyer.outputTexture
             case .feedback:
-                return self.feedbacks.first?.outputTexture
-            case .xyz(let i):
-                guard self.xyzs.indices.contains(i) else { return nil }
-                return self.xyzs[i].outputTexture
+                return self.feedback.outputTexture
+            case .xyz:
+                return self.xyz.outputTexture
             }
         }
-        for k in keyers { k.sourceResolver = resolver }
-        for f in feedbacks { f.sourceResolver = resolver }
-        for x in xyzs { x.sourceResolver = resolver }
+        keyer.sourceResolver = resolver
+        feedback.sourceResolver = resolver
+        xyz.sourceResolver = resolver
     }
 
     var currentOutputTexture: MTLTexture? {
@@ -68,13 +66,13 @@ final class MasterMixerOffscreen: FrameRenderer {
     }
 
     func render(frameIndex: UInt64, elapsedTime: CFTimeInterval) {
-        // Fixed order: feedbacks first (so a keyer pad that sources a feedback
-        // gets fresh data), then keyers. Self-references through pads still
-        // work via 1-frame feedback because each renderer publishes a stable
-        // outputTexture pointer that's read on subsequent frames.
-        for feedback in feedbacks { feedback.render() }
-        for keyer in keyers { keyer.render() }
-        for xyz in xyzs { xyz.render() }
+        // Fixed order: feedback first (so a keyer that sources the
+        // feedback gets fresh data), then keyer, then xyz. Self-references
+        // through pads still work via 1-frame feedback because each
+        // renderer publishes a stable outputTexture pointer.
+        feedback.render()
+        keyer.render()
+        xyz.render()
 
         let canvasSize = mixer.outputMode.canvasSize
         if (canvasSize.width, canvasSize.height) != lastSize {
@@ -128,15 +126,12 @@ final class MasterMixerOffscreen: FrameRenderer {
         case .pad(let index):
             guard pads.pads.indices.contains(index) else { return nil }
             return pads.pads[index].texture
-        case .keyer(let i):
-            guard keyers.indices.contains(i) else { return nil }
-            return keyers[i].outputTexture
-        case .feedback(let i):
-            guard feedbacks.indices.contains(i) else { return nil }
-            return feedbacks[i].outputTexture
-        case .xyz(let i):
-            guard xyzs.indices.contains(i) else { return nil }
-            return xyzs[i].outputTexture
+        case .keyer:
+            return keyer.outputTexture
+        case .feedback:
+            return feedback.outputTexture
+        case .xyz:
+            return xyz.outputTexture
         }
     }
 

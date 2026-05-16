@@ -22,11 +22,11 @@ final class AppState: ObservableObject {
     let pads = PadSystem()
     let mixer = MixerState()
     let keyerSystem = KeyerSystem()
-    let keyerRenderers: [KeyerRenderer]
+    let keyerRenderer: KeyerRenderer
     let feedbackSystem = FeedbackSystem()
-    let feedbackRenderers: [FeedbackRenderer]
+    let feedbackRenderer: FeedbackRenderer
     let xyzSystem = XYZSystem()
-    let xyzRenderers: [XYZRenderer]
+    let xyzRenderer: XYZRenderer
     let fxPadSystem = FXPadSystem()
     let ntscState = NTSCState()
     let ntscPipeline: NTSCPipeline
@@ -48,9 +48,8 @@ final class AppState: ObservableObject {
     /// Subscribes to `transport.tickPublisher` for evaluation.
     let lfoEngine: LFOEngine
 
-    /// Back-compat shim for code that still references a single keyer (MIDI
-    /// bindings, audio routing). Points at Keyer 1.
-    var keyerState: KeyerState { keyerSystem.keyers[0] }
+    /// Convenience access to the single atomic keyer state.
+    var keyerState: KeyerState { keyerSystem.keyer }
 
     private var started = false
     private var cancellables = Set<AnyCancellable>()
@@ -62,22 +61,16 @@ final class AppState: ObservableObject {
         let ntscState = self.ntscState
         self.lfoEngine = LFOEngine(transport: self.transport)
 
-        self.keyerRenderers = keyerSystem.keyers.map {
-            try! KeyerRenderer(pads: pads, keyer: $0)
-        }
-        self.feedbackRenderers = feedbackSystem.units.map {
-            try! FeedbackRenderer(pads: pads, state: $0)
-        }
-        self.xyzRenderers = xyzSystem.units.map {
-            try! XYZRenderer(state: $0)
-        }
+        self.keyerRenderer = try! KeyerRenderer(pads: pads, keyer: keyerSystem.keyer)
+        self.feedbackRenderer = try! FeedbackRenderer(pads: pads, state: feedbackSystem.unit)
+        self.xyzRenderer = try! XYZRenderer(state: xyzSystem.unit)
         self.ntscPipeline = try! NTSCPipeline(state: ntscState)
         self.masterMixerOffscreen = try! MasterMixerOffscreen(
             pads: pads,
             mixer: mixer,
-            keyers: self.keyerRenderers,
-            feedbacks: self.feedbackRenderers,
-            xyzs: self.xyzRenderers,
+            keyer: self.keyerRenderer,
+            feedback: self.feedbackRenderer,
+            xyz: self.xyzRenderer,
             ntscPipeline: self.ntscPipeline
         )
 
@@ -85,14 +78,14 @@ final class AppState: ObservableObject {
         self.midiBindings = MIDIBindings(
             mixer: mixer,
             pads: pads,
-            keyer: keyerSystem.keyers[0],
+            keyer: keyerSystem.keyer,
             ntsc: ntscState,
             recorder: recorder
         )
         self.midiOutputBindings = MIDIOutputBindings(
             mixer: mixer,
             pads: pads,
-            keyer: keyerSystem.keyers[0],
+            keyer: keyerSystem.keyer,
             ntsc: ntscState
         )
         self.midiBindings.output = self.midiOutputBindings
@@ -221,14 +214,13 @@ final class AppState: ObservableObject {
                 for p in fx.parameters { p.value = p.range.lowerBound }
             }
         }
-        for k in keyerSystem.keyers {
-            k.kind = .chroma
-            k.threshold = 0.35
-            k.softness = 0.1
-            k.keyColor = SIMD3(0, 1, 0)
-        }
-        keyerSystem.keyers[0].foregroundPadIndex = 6
-        keyerSystem.keyers[0].backgroundPadIndex = 7
+        let k = keyerSystem.keyer
+        k.kind = .chroma
+        k.threshold = 0.35
+        k.softness = 0.1
+        k.keyColor = SIMD3(0, 1, 0)
+        k.foregroundPadIndex = 6
+        k.backgroundPadIndex = 7
         mixer.ch1Source = .pad(0)
         mixer.ch2Source = .pad(1)
         mixer.activeChannel = .ch1
@@ -315,18 +307,11 @@ final class AppState: ObservableObject {
         pads.onSourceChanged = refreshPads
         refreshPads()
 
-        // Keyers + feedback: static state objects, register once.
-        for (i, k) in keyerSystem.keyers.enumerated() {
-            lfoEngine.registerTargets(LFOTargets.forKeyer(index: i, state: k))
-        }
-        if let fb = feedbackSystem.unit(at: 0) {
-            lfoEngine.registerTargets(LFOTargets.forFeedback(state: fb))
-        }
-        // XYZ units: register targets for each, scoped via the
-        // `xyz.N.` id prefix.
-        for (i, x) in xyzSystem.units.enumerated() {
-            lfoEngine.registerTargets(LFOTargets.forXYZ(index: i, state: x))
-        }
+        // Keyer / feedback / xyz are now atomic — register the single
+        // target set for each.
+        lfoEngine.registerTargets(LFOTargets.forKeyer(state: keyerSystem.keyer))
+        lfoEngine.registerTargets(LFOTargets.forFeedback(state: feedbackSystem.unit))
+        lfoEngine.registerTargets(LFOTargets.forXYZ(state: xyzSystem.unit))
         // Global / macro-only: mixer position. Only macros see this
         // (LFOEngine.availableTargets(forSlot:) filters per slot).
         lfoEngine.registerTargets(LFOTargets.forMixer(mixer))
@@ -363,12 +348,10 @@ final class AppState: ObservableObject {
                 self?.applyAudioRouting()
             }
             .store(in: &cancellables)
-        for keyer in keyerSystem.keyers {
-            keyer.$foregroundSource
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in self?.applyAudioRouting() }
-                .store(in: &cancellables)
-        }
+        keyerSystem.keyer.$foregroundSource
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.applyAudioRouting() }
+            .store(in: &cancellables)
         // Re-apply routing whenever a pad's source changes (drag-drop,
         // session load, etc.) so the new audioPlayer's isRouted state
         // matches the current channel assignments.
@@ -385,17 +368,12 @@ final class AppState: ObservableObject {
             switch source {
             case .pad(let i):
                 routed.insert(i)
-            case .keyer(let i):
-                if let k = keyerSystem.keyer(at: i) {
-                    routed.insert(k.foregroundPadIndex)
-                }
-            case .feedback(let i):
-                if let fb = feedbackSystem.unit(at: i) {
-                    routed.insert(fb.sourcePadIndex)
-                }
-            case .xyz(let i):
-                if let x = xyzSystem.unit(at: i),
-                   case .pad(let p) = x.inputSource {
+            case .keyer:
+                routed.insert(keyerSystem.keyer.foregroundPadIndex)
+            case .feedback:
+                routed.insert(feedbackSystem.unit.sourcePadIndex)
+            case .xyz:
+                if case .pad(let p) = xyzSystem.unit.inputSource {
                     routed.insert(p)
                 }
             }
@@ -507,18 +485,16 @@ final class AppState: ObservableObject {
         P10Logger.log("[AppState] pad \(index + 1) source → camera \(deviceID)")
     }
 
-    func setKeyerSource(keyerIndex: Int, at padIndex: Int) {
-        guard keyerRenderers.indices.contains(keyerIndex) else { return }
-        let source = KeyerPadSource(keyerIndex: keyerIndex, renderer: keyerRenderers[keyerIndex])
+    func setKeyerSource(at padIndex: Int) {
+        let source = KeyerPadSource(renderer: keyerRenderer)
         pads.setSource(source, at: padIndex)
-        P10Logger.log("[AppState] pad \(padIndex + 1) source → Keyer \(keyerIndex + 1)")
+        P10Logger.log("[AppState] pad \(padIndex + 1) source → Keyer")
     }
 
-    func setFeedbackSource(feedbackIndex: Int, at padIndex: Int) {
-        guard feedbackRenderers.indices.contains(feedbackIndex) else { return }
-        let source = FeedbackPadSource(feedbackIndex: feedbackIndex, renderer: feedbackRenderers[feedbackIndex])
+    func setFeedbackSource(at padIndex: Int) {
+        let source = FeedbackPadSource(renderer: feedbackRenderer)
         pads.setSource(source, at: padIndex)
-        P10Logger.log("[AppState] pad \(padIndex + 1) source → Feedback \(feedbackIndex + 1)")
+        P10Logger.log("[AppState] pad \(padIndex + 1) source → Feedback")
     }
 
     func loadUserVideo(from sourceURL: URL, at index: Int) {

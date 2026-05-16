@@ -24,9 +24,9 @@ enum FXPadKind: Equatable, Hashable, Codable {
     /// FX type (index 0).
     var channelSource: ChannelSource {
         switch self {
-        case .keyer: return .keyer(0)
-        case .feedback: return .feedback(0)
-        case .xyz: return .xyz(0)
+        case .keyer: return .keyer
+        case .feedback: return .feedback
+        case .xyz: return .xyz
         }
     }
 
@@ -34,9 +34,9 @@ enum FXPadKind: Equatable, Hashable, Codable {
     /// per-slot LFO to pull the right targets out of LFOEngine.
     var underlyingLFOSlotID: String {
         switch self {
-        case .keyer: return "keyer-0"
+        case .keyer: return "keyer"
         case .feedback: return "feedback"
-        case .xyz: return "xyz-0"
+        case .xyz: return "xyz"
         }
     }
 }

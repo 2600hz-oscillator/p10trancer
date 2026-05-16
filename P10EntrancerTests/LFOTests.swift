@@ -229,16 +229,15 @@ final class LFOTests: XCTestCase {
                        "pad-0 LFO must only see pad.0.* targets, NOT pad.3 or keyer or mixer")
     }
 
-    func test_keyer_lfo_only_sees_its_own_keyer_targets() {
+    func test_keyer_lfo_only_sees_keyer_targets() {
         let transport = Transport()
         let engine = LFOEngine(transport: transport)
         engine.registerTargets([
-            LFOTarget(id: "keyer.0.threshold", displayName: "K1 thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
-            LFOTarget(id: "keyer.1.threshold", displayName: "K2 thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "keyer.threshold", displayName: "K thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
             LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
         ])
-        let k0 = engine.availableTargets(forSlot: "keyer-0")
-        XCTAssertEqual(k0.map(\.id), ["keyer.0.threshold"])
+        let k = engine.availableTargets(forSlot: "keyer")
+        XCTAssertEqual(k.map(\.id), ["keyer.threshold"])
     }
 
     func test_macro_lfo_sees_everything_including_mixer_position() {
@@ -246,14 +245,14 @@ final class LFOTests: XCTestCase {
         let engine = LFOEngine(transport: transport)
         engine.registerTargets([
             LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
-            LFOTarget(id: "keyer.0.threshold", displayName: "K1 thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
+            LFOTarget(id: "keyer.threshold", displayName: "K thr", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
             LFOTarget(id: "feedback.zoom", displayName: "FB zoom", range: 0.5...2, getBase: { 1 }, setEffective: { _ in }),
             LFOTarget(id: "mixer.position", displayName: "Position", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
         ])
         let macroTargets = engine.availableTargets(forSlot: "macro-0")
         let ids = Set(macroTargets.map(\.id))
         XCTAssertTrue(ids.contains("pad.0.volume"))
-        XCTAssertTrue(ids.contains("keyer.0.threshold"))
+        XCTAssertTrue(ids.contains("keyer.threshold"))
         XCTAssertTrue(ids.contains("feedback.zoom"))
         XCTAssertTrue(ids.contains("mixer.position"),
                       "macro LFO must be able to target the master mixer position")
@@ -266,7 +265,7 @@ final class LFOTests: XCTestCase {
             LFOTarget(id: "pad.0.volume", displayName: "P1 vol", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
             LFOTarget(id: "mixer.position", displayName: "Position", range: 0...1, getBase: { 0 }, setEffective: { _ in }),
         ])
-        for slot in ["pad-0", "pad-8", "keyer-0", "keyer-1", "feedback"] {
+        for slot in ["pad-0", "pad-8", "keyer", "feedback", "xyz"] {
             let ids = Set(engine.availableTargets(forSlot: slot).map(\.id))
             XCTAssertFalse(ids.contains("mixer.position"),
                            "\(slot) LFO must NOT be able to target the master position")
