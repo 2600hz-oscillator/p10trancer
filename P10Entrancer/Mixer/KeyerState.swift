@@ -67,17 +67,16 @@ final class KeyerState: ObservableObject {
     }
 }
 
-/// Holds the two independent keyers and exposes them by index. Index 0 = Keyer 1,
-/// index 1 = Keyer 2. Same model wherever code needs to look up a keyer by its
-/// numeric tag — channel sources, MIDI, UI tabs.
+/// Holds the single canonical keyer. Kept as a "system" so call sites
+/// that loop over keyers (MIDI, sessions, renderers) don't have to
+/// special-case the one-instance shape.
 @MainActor
 final class KeyerSystem: ObservableObject {
     let keyers: [KeyerState]
 
     init() {
         self.keyers = [
-            KeyerState(foregroundSource: .pad(6), backgroundSource: .pad(7)),
-            KeyerState(foregroundSource: .pad(7), backgroundSource: .pad(8))
+            KeyerState(foregroundSource: .pad(6), backgroundSource: .pad(7))
         ]
     }
 

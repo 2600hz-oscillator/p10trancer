@@ -42,6 +42,63 @@ final class MIDIOutputBindingsTests: XCTestCase {
         XCTAssertTrue(sink.events.contains { $0 == [0xC0, 5, 0] })
     }
 
+    func test_ch1_keyer_assignment_emits_pc40() {
+        sink.events.removeAll()
+        mixer.ch1Source = .keyer(0)
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 40, 0] },
+                      "ch1.keyer must emit PC 40 so automation captures it")
+    }
+
+    func test_ch1_feedback_assignment_emits_pc41() {
+        sink.events.removeAll()
+        mixer.ch1Source = .feedback(0)
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 41, 0] })
+    }
+
+    func test_ch1_xyz_assignment_emits_pc42() {
+        sink.events.removeAll()
+        mixer.ch1Source = .xyz(0)
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 42, 0] })
+    }
+
+    func test_ch2_keyer_feedback_xyz_emit_pc_50_51_52() {
+        sink.events.removeAll()
+        mixer.ch2Source = .keyer(0)
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 50, 0] })
+        sink.events.removeAll()
+        mixer.ch2Source = .feedback(0)
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 51, 0] })
+        sink.events.removeAll()
+        mixer.ch2Source = .xyz(0)
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 52, 0] })
+    }
+
+    /// End-to-end: a routing PC out of MIDIOutputBindings must round-trip
+    /// through MIDIBindings.handleProgramChange to set the same source.
+    func test_channel_source_pc_round_trip_through_midi_bindings() {
+        let bindings = MIDIBindings(mixer: mixer, pads: pads, keyer: keyer, ntsc: ntsc)
+        bindings.output = output
+        // ch1 → keyer: emit PC 40 then receive it.
+        mixer.ch1Source = .pad(0)
+        bindings.handleProgramChange(40)
+        XCTAssertEqual(mixer.ch1Source, .keyer(0))
+        // ch2 → feedback
+        bindings.handleProgramChange(51)
+        XCTAssertEqual(mixer.ch2Source, .feedback(0))
+        // ch2 → xyz
+        bindings.handleProgramChange(52)
+        XCTAssertEqual(mixer.ch2Source, .xyz(0))
+        // ch1 → feedback
+        bindings.handleProgramChange(41)
+        XCTAssertEqual(mixer.ch1Source, .feedback(0))
+        // ch1 → xyz
+        bindings.handleProgramChange(42)
+        XCTAssertEqual(mixer.ch1Source, .xyz(0))
+        // ch2 → keyer
+        bindings.handleProgramChange(50)
+        XCTAssertEqual(mixer.ch2Source, .keyer(0))
+    }
+
     func test_active_channel_change_emits_pc_10_or_11() {
         sink.events.removeAll()
         mixer.activeChannel = .ch2

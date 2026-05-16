@@ -33,6 +33,10 @@ final class AutomationEngine: ObservableObject {
     /// also plays back the existing take during recording so you can hear it.
     @Published var overdubEnabled: Bool = false
 
+    /// When true, playback restarts from the beginning when the take ends,
+    /// looping endlessly until the user stops it.
+    @Published var loopEnabled: Bool = false
+
     private var recordingEvents: [AutomationEvent] = []
     private var recordingTouchedStreams: Set<StreamKey> = []
     private var recordingStartedAt: TimeInterval = 0
@@ -103,9 +107,14 @@ final class AutomationEngine: ObservableObject {
 
     func disarm() {
         switch state {
-        case .recording: stopRecording(save: false)
-        case .playing: stopPlayback()
-        default: break
+        case .recording:
+            // Stopping mid-recording must save the take — otherwise
+            // tapping STOP would silently discard the user's pass.
+            stopRecording(save: true)
+        case .playing:
+            stopPlayback()
+        default:
+            break
         }
         stopInternalClock()
         state = .idle
@@ -345,7 +354,19 @@ final class AutomationEngine: ObservableObject {
         emitPlaybackEvent(nowEvent.bytes)
         playbackEventCursor += 1
         if playbackEventCursor >= playbackEvents.count {
+            if loopEnabled, !playbackEvents.isEmpty {
+                // Loop: restart cursor at the top and reset the absolute
+                // start time so subsequent event delays are computed
+                // relative to the new pass.
+                playbackEventCursor = 0
+                playbackStartTime = CACurrentMediaTime()
+                currentTick = 0
+                P10Logger.log("[Automation] loop → restarting take")
+                scheduleNextPlaybackEvents()
+                return
+            }
             P10Logger.log("[Automation] playback complete")
+            stopInternalClock()
             state = .idle
             return
         }

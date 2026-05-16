@@ -104,10 +104,7 @@ final class MIDIOutputBindings {
             .dropFirst()
             .sink { [weak self] source in
                 guard let self else { return }
-                self.muted = self.muted // explicit no-op for clarity
-                if case .pad(let i) = source {
-                    self.send([0xC0, UInt8(i + 1), 0])
-                }
+                self.emitChannelSource(source, channel: .ch1)
             }
             .store(in: &cancellables)
         mixer.$ch2Source
@@ -115,9 +112,7 @@ final class MIDIOutputBindings {
             .dropFirst()
             .sink { [weak self] source in
                 guard let self else { return }
-                if case .pad(let i) = source {
-                    self.send([0xC0, UInt8(i + 1), 0])
-                }
+                self.emitChannelSource(source, channel: .ch2)
             }
             .store(in: &cancellables)
         mixer.$activeChannel
@@ -171,6 +166,31 @@ final class MIDIOutputBindings {
         ntsc.$lumaNoise.removeDuplicates().sink { [weak self] v in self?.sendCC(20, v / 0.3) }.store(in: &cancellables)
         ntsc.$chromaNoise.removeDuplicates().sink { [weak self] v in self?.sendCC(21, v / 0.3) }.store(in: &cancellables)
         ntsc.$lumaPeaking.removeDuplicates().sink { [weak self] v in self?.sendCC(22, v / 3.0) }.store(in: &cancellables)
+    }
+
+    /// Emit a Program Change for a channel-source change. Pad sources
+    /// use PC 1..9 (the long-standing mapping). Non-pad sources use:
+    ///   ch1.keyer → PC 40, ch1.feedback → PC 41, ch1.xyz → PC 42
+    ///   ch2.keyer → PC 50, ch2.feedback → PC 51, ch2.xyz → PC 52
+    /// Recorded into automation takes via `MIDIOutput.onSent`, replayed
+    /// through `MIDIBindings` which sets the matching channel source.
+    private func emitChannelSource(_ source: ChannelSource, channel: ActiveChannel) {
+        switch source {
+        case .pad(let i):
+            // Pad routing relies on the active-channel state at receive
+            // time — only emit when the channel that's changing is the
+            // active one, otherwise the receiver would route to the
+            // wrong channel.
+            if channel == mixer.activeChannel {
+                send([0xC0, UInt8(i + 1), 0])
+            }
+        case .keyer:
+            send([0xC0, channel == .ch1 ? 40 : 50, 0])
+        case .feedback:
+            send([0xC0, channel == .ch1 ? 41 : 51, 0])
+        case .xyz:
+            send([0xC0, channel == .ch1 ? 42 : 52, 0])
+        }
     }
 
     private func sendCC(_ cc: UInt8, _ normalized: Float) {

@@ -171,6 +171,7 @@ struct AutomationPanelView: View {
                     engine.startPlaybackNow()
                 }
                 Spacer()
+                loopToggle
                 overdubToggle
             }
             HStack(spacing: 10) {
@@ -185,6 +186,24 @@ struct AutomationPanelView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    private var loopToggle: some View {
+        Button(action: { engine.loopEnabled.toggle() }) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(engine.loopEnabled ? Color.cyan : Color.white.opacity(0.25))
+                    .frame(width: 9, height: 9)
+                Text("LOOP")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 44)
+            .background(engine.loopEnabled ? Color.cyan.opacity(0.18) : Color.white.opacity(0.06))
+            .overlay(Rectangle().strokeBorder(engine.loopEnabled ? Color.cyan : Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private var overdubToggle: some View {

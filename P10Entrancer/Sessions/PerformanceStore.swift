@@ -166,8 +166,6 @@ final class PerformanceStore: ObservableObject {
                 pads: padSpecs,
                 keyers: [
                     .init(foregroundPadIndex: 6, backgroundPadIndex: 7, kind: 0,
-                          threshold: 0.35, softness: 0.1, keyColor: [0, 1, 0]),
-                    .init(foregroundPadIndex: 7, backgroundPadIndex: 8, kind: 0,
                           threshold: 0.35, softness: 0.1, keyColor: [0, 1, 0])
                 ],
                 mixer: .init(

@@ -133,6 +133,18 @@ final class MIDIBindings {
         case 22...30:
             // Select which pad subsequent FX-param CCs (23-34) target.
             mixer.inspectedPadIndex = program - 22
+        case 40:
+            mixer.ch1Source = .keyer(0)
+        case 41:
+            mixer.ch1Source = .feedback(0)
+        case 42:
+            mixer.ch1Source = .xyz(0)
+        case 50:
+            mixer.ch2Source = .keyer(0)
+        case 51:
+            mixer.ch2Source = .feedback(0)
+        case 52:
+            mixer.ch2Source = .xyz(0)
         default:
             break
         }

@@ -1,11 +1,9 @@
 import SwiftUI
 import MetalKit
 
-/// Row of three FX pads — the bottom row of the 4×3 grid. Each cell
-/// is driven by an `FXPadSlot` whose `kind` (keyer/feedback/xyz)
-/// determines which renderer + settings sheet to show. The user can
-/// retype a slot from its gear menu — first a "Change type" picker
-/// is offered alongside the open-settings button.
+/// Bottom row of three fixed FX pads: KEYER, FEEDBACK, XYZ. Each slot
+/// is permanent — the gear icon opens that slot's settings sheet
+/// directly, and the waveform icon opens the per-slot LFO sheet.
 struct OutputPadsRowView: View {
     let keyerSystem: KeyerSystem
     let feedbackSystem: FeedbackSystem
@@ -91,9 +89,8 @@ private struct OutputPadCell: View {
                             .padding(.top, 6)
                     }
                     Spacer()
-                    // Per-slot LFO sheet — matches the waveform icon
-                    // on video pads so the LFO is always one tap away
-                    // (no need to dig through the gear menu).
+                    // Per-slot LFO sheet — same waveform icon as on
+                    // the video pads above.
                     Button { lfoPresented = true } label: {
                         Image(systemName: "waveform.path.ecg")
                             .font(.system(size: 12, weight: .bold))
@@ -108,16 +105,7 @@ private struct OutputPadCell: View {
                 }
                 Spacer()
                 HStack {
-                    Menu {
-                        Button("Open setup…") { settingsPresented = true }
-                        Button("Open LFO…") { lfoPresented = true }
-                        Divider()
-                        Section("Change to") {
-                            ForEach(typePickerOptions, id: \.self) { option in
-                                Button(option.displayLabel) { slot.kind = option }
-                            }
-                        }
-                    } label: {
+                    Button { settingsPresented = true } label: {
                         Image(systemName: "gearshape.fill")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.white)
@@ -125,6 +113,7 @@ private struct OutputPadCell: View {
                             .background(.black.opacity(0.6))
                             .clipShape(Circle())
                     }
+                    .buttonStyle(.plain)
                     .padding(6)
                     Spacer()
                 }
@@ -142,7 +131,7 @@ private struct OutputPadCell: View {
         }
         .sheet(isPresented: $lfoPresented) {
             LFOSettingsSheet(
-                title: "\(kind.displayLabel) (slot \(slot.id + 1))",
+                title: "\(kind.displayLabel) LFO",
                 lfo: AppState.shared.lfoEngine.lfo(for: slot.lfoSlotID),
                 availableTargets: AppState.shared.lfoEngine.availableTargets(forSlot: slot.lfoSlotID),
                 transport: AppState.shared.transport
@@ -150,34 +139,23 @@ private struct OutputPadCell: View {
         }
     }
 
-    /// Every option offered in the "Change to" menu. Includes all
-    /// instances of all three FX types so the user can swap a slot to
-    /// e.g. XYZ 2 or Keyer 1 directly.
-    private var typePickerOptions: [FXPadKind] {
-        var opts: [FXPadKind] = []
-        for i in keyerSystem.keyers.indices { opts.append(.keyer(i)) }
-        for i in feedbackSystem.units.indices { opts.append(.feedback(i)) }
-        for i in xyzSystem.units.indices { opts.append(.xyz(i)) }
-        return opts
-    }
-
     @ViewBuilder
     private func preview(kind: FXPadKind) -> some View {
         switch kind {
-        case .keyer(let i):
-            if let r = renderers.keyerRenderers[safe: i] {
+        case .keyer:
+            if let r = renderers.keyerRenderers[safe: 0] {
                 OutputTexturePreview(texture: { r.outputTexture })
             } else {
                 Color.black
             }
-        case .feedback(let i):
-            if let r = renderers.feedbackRenderers[safe: i] {
+        case .feedback:
+            if let r = renderers.feedbackRenderers[safe: 0] {
                 OutputTexturePreview(texture: { r.outputTexture })
             } else {
                 Color.black
             }
-        case .xyz(let i):
-            if let r = renderers.xyzRenderers[safe: i] {
+        case .xyz:
+            if let r = renderers.xyzRenderers[safe: 0] {
                 OutputTexturePreview(texture: { r.outputTexture })
             } else {
                 Color.black
@@ -188,17 +166,17 @@ private struct OutputPadCell: View {
     @ViewBuilder
     private func outputPadSettings(for kind: FXPadKind) -> some View {
         switch kind {
-        case .keyer(let i):
-            if let state = keyerSystem.keyer(at: i) {
-                KeyerSettingsSheet(keyer: state, keyerIndex: i)
+        case .keyer:
+            if let state = keyerSystem.keyer(at: 0) {
+                KeyerSettingsSheet(keyer: state, keyerIndex: 0)
             }
-        case .feedback(let i):
-            if let state = feedbackSystem.unit(at: i) {
+        case .feedback:
+            if let state = feedbackSystem.unit(at: 0) {
                 FeedbackSettingsSheet(state: state)
             }
-        case .xyz(let i):
-            if let state = xyzSystem.unit(at: i) {
-                XYZSettingsSheet(state: state, xyzIndex: i)
+        case .xyz:
+            if let state = xyzSystem.unit(at: 0) {
+                XYZSettingsSheet(state: state, xyzIndex: 0)
             }
         }
     }

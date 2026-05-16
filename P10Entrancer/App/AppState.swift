@@ -229,8 +229,6 @@ final class AppState: ObservableObject {
         }
         keyerSystem.keyers[0].foregroundPadIndex = 6
         keyerSystem.keyers[0].backgroundPadIndex = 7
-        keyerSystem.keyers[1].foregroundPadIndex = 7
-        keyerSystem.keyers[1].backgroundPadIndex = 8
         mixer.ch1Source = .pad(0)
         mixer.ch2Source = .pad(1)
         mixer.activeChannel = .ch1
@@ -342,17 +340,9 @@ final class AppState: ObservableObject {
                   self.fxPadSystem.slots.indices.contains(index) else { return nil }
             return self.fxPadSystem.slots[index].kind.underlyingLFOSlotID
         }
-        // On FX-type change inside a slot, wipe the slot LFO's
-        // assignment targets — the new type has different params, so
-        // any saved target IDs no longer apply. Wave shape / rate /
-        // amount sliders persist.
-        for slot in fxPadSystem.slots {
-            slot.onKindChange = { [weak self] slot, _, _ in
-                guard let self else { return }
-                let lfo = self.lfoEngine.lfo(for: slot.lfoSlotID)
-                lfo.assignments = (0..<3).map { _ in LFOAssignment() }
-            }
-        }
+        // FX-type per slot is now immutable, so there's no kind-change
+        // hook to install. Per-slot LFO assignment targets stay valid
+        // for the lifetime of the app.
     }
 
     private func wireMasterVolume() {

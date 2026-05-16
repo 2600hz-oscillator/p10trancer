@@ -164,6 +164,7 @@ struct BottomControlBar: View {
             endSessionButton
             Spacer(minLength: 8)
             automationStatus
+            recAutoButton
             thermalIndicator
         }
         .padding(.horizontal, 14)
@@ -385,6 +386,32 @@ struct BottomControlBar: View {
                 .overlay(Rectangle().strokeBorder(Color.cyan, lineWidth: 1))
         }
         .buttonStyle(.plain)
+    }
+
+    /// Bottom-right primary control for recording automation. When
+    /// recording is in flight (including the arm-waiting-for-clock
+    /// state) shows STOP REC AUTO; otherwise shows START REC AUTO.
+    /// Tapping toggles `engine.startRecordingNow()` / `engine.disarm()`.
+    private var recAutoButton: some View {
+        let isRecOrArmed = automation.state == .recording || automation.state == .armedRecord
+        let title = isRecOrArmed ? "STOP REC AUTO" : "START REC AUTO"
+        let tint: Color = isRecOrArmed ? .red : .red.opacity(0.7)
+        return Button(action: {
+            if isRecOrArmed {
+                automation.disarm()
+            } else {
+                automation.startRecordingNow()
+            }
+        }) {
+            Text(title)
+                .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                .foregroundStyle(isRecOrArmed ? .black : .white)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(isRecOrArmed ? Color.red : Color.red.opacity(0.18))
+                .overlay(Rectangle().strokeBorder(tint, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("rec-auto-button")
     }
 
     private var automationStatus: some View {
