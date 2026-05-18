@@ -128,6 +128,32 @@ final class MIDIOutputBindingsTests: XCTestCase {
         XCTAssertTrue(sink.events.isEmpty, "muted flag should suppress all output")
     }
 
+    func test_outputmode_change_emits_pc17_and_explicit() {
+        sink.events.removeAll()
+        mixer.outputMode = .ntsc4_3
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 17, 0] },
+                      "Legacy toggle PC 17 must still emit")
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 61, 0] },
+                      "Explicit PC 61 (NTSC) must emit for stateless receivers")
+        sink.events.removeAll()
+        mixer.outputMode = .hd720p
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 60, 0] },
+                      "Explicit PC 60 (HD) must emit when switching back")
+    }
+
+    func test_keyer_isEnabled_change_emits_pc18_and_explicit() {
+        sink.events.removeAll()
+        keyer.isEnabled = true
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 18, 0] },
+                      "Legacy toggle PC 18 must still emit")
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 62, 0] },
+                      "Explicit PC 62 (keyer on) must emit")
+        sink.events.removeAll()
+        keyer.isEnabled = false
+        XCTAssertTrue(sink.events.contains { $0 == [0xC0, 63, 0] },
+                      "Explicit PC 63 (keyer off) must emit")
+    }
+
     func test_inbound_midi_round_trip_does_not_echo() {
         // Simulate the user-facing scenario: MIDI comes in via MIDIBindings,
         // MIDIBindings sets the muted flag, the resulting state changes don't

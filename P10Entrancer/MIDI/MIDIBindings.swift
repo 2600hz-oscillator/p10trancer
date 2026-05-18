@@ -33,8 +33,8 @@ final class MIDIBindings {
         router.onNoteOn = { [weak self] note, _ in
             self?.handleNoteOn(note)
         }
-        router.onControlChange = { [weak self] cc, value in
-            self?.handleCC(cc: cc, value: value)
+        router.onControlChange = { [weak self] cc, value, channel in
+            self?.handleCC(cc: cc, value: value, channel: channel)
         }
         router.onProgramChange = { [weak self] program in
             self?.handleProgramChange(program)
@@ -148,6 +148,17 @@ final class MIDIBindings {
             mixer.ch2Source = .feedback
         case 52:
             mixer.ch2Source = .xyz
+        // Explicit setters for binary modes — stateless controllers
+        // (Electra One) can send a single PC to drive the iPad to an
+        // exact state, vs. toggling and having to track current state.
+        case 60:
+            mixer.outputMode = .hd720p
+        case 61:
+            mixer.outputMode = .ntsc4_3
+        case 62:
+            keyer?.isEnabled = true
+        case 63:
+            keyer?.isEnabled = false
         default:
             break
         }
@@ -155,12 +166,25 @@ final class MIDIBindings {
 
     // MARK: - Control Change (continuous controllers)
 
-    func handleCC(cc: Int, value: Int) {
-        withMutedOutput { _handleCC(cc: cc, value: value) }
+    /// Inbound CC dispatch. `channel` is 0-15 (MIDI ch 1-16); defaults to
+    /// 15 so legacy callers without channel info land in the
+    /// inspectedPadIndex code path (channels 9-15) rather than
+    /// accidentally targeting pad 0.
+    func handleCC(cc: Int, value: Int, channel: Int = 15) {
+        withMutedOutput { _handleCC(cc: cc, value: value, channel: channel) }
     }
 
-    private func _handleCC(cc: Int, value: Int) {
+    private func _handleCC(cc: Int, value: Int, channel: Int) {
         let v = Float(value) / 127.0
+        // CC 23-34 on channels 0-8 (MIDI ch 1-9) target pad N's FX
+        // directly, bypassing inspectedPadIndex. Lets stateless
+        // controllers (Electra One) put every pad on its own page.
+        // Channels 9-15 fall through to the original inspectedPadIndex
+        // path so existing controllers keep working.
+        if (23...34).contains(cc), (0...8).contains(channel) {
+            dispatchPadFX(cc: cc, normalized: v, padIndex: channel)
+            return
+        }
         switch cc {
         case 1:
             mixer.position = v
@@ -230,8 +254,29 @@ final class MIDIBindings {
         }
     }
 
-    private func setPadFX(name: String, paramIndex: Int, normalized: Float, range: ClosedRange<Float>) {
-        let padIdx = mixer.inspectedPadIndex
+    /// Channel-keyed FX dispatch. Maps CC 23-34 to the same (FX name,
+    /// param index, range) triple as the inspectedPadIndex path but
+    /// writes to `padIndex` directly.
+    private func dispatchPadFX(cc: Int, normalized v: Float, padIndex: Int) {
+        switch cc {
+        case 23: setPadFX(name: "Blur", paramIndex: 0, normalized: v, range: 0...6, padIndex: padIndex)
+        case 24: setPadFX(name: "Chroma", paramIndex: 0, normalized: v, range: 0...1, padIndex: padIndex)
+        case 25: setPadFX(name: "Chroma", paramIndex: 1, normalized: v, range: 0...3, padIndex: padIndex)
+        case 26: setPadFX(name: "Chroma", paramIndex: 2, normalized: v, range: 0...3, padIndex: padIndex)
+        case 27: setPadFX(name: "YUV Phaser", paramIndex: 0, normalized: v, range: 0...1, padIndex: padIndex)
+        case 28: setPadFX(name: "YUV Phaser", paramIndex: 1, normalized: v, range: 0...1, padIndex: padIndex)
+        case 29: setPadFX(name: "Luma Phaser", paramIndex: 1, normalized: v, range: 0...1, padIndex: padIndex)
+        case 30: setPadFX(name: "Luma Phaser", paramIndex: 2, normalized: v, range: 0.5...8, padIndex: padIndex)
+        case 31: setPadFX(name: "Edge Enhance", paramIndex: 0, normalized: v, range: 0...3, padIndex: padIndex)
+        case 32: setPadFX(name: "Feedback", paramIndex: 0, normalized: v, range: 0...1, padIndex: padIndex)
+        case 33: setPadFX(name: "Feedback", paramIndex: 1, normalized: v, range: 0.85...1.15, padIndex: padIndex)
+        case 34: setPadFX(name: "Feedback", paramIndex: 3, normalized: v, range: 0.5...1.0, padIndex: padIndex)
+        default: break
+        }
+    }
+
+    private func setPadFX(name: String, paramIndex: Int, normalized: Float, range: ClosedRange<Float>, padIndex: Int? = nil) {
+        let padIdx = padIndex ?? mixer.inspectedPadIndex
         guard pads.pads.indices.contains(padIdx) else { return }
         let chain = pads.pads[padIdx].fxChain
         guard let effect = chain.effects.first(where: { $0.name == name }) else { return }

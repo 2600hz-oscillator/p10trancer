@@ -111,6 +111,90 @@ final class MIDIBindingsTests: XCTestCase {
         XCTAssertFalse(mixer.ch1IsKeyer)
     }
 
+    // MARK: - Explicit binary mode setters (Electra-friendly)
+
+    func test_pc_60_sets_output_mode_to_hd() {
+        mixer.outputMode = .ntsc4_3
+        bindings.handleProgramChange(60)
+        XCTAssertEqual(mixer.outputMode, .hd720p)
+    }
+
+    func test_pc_61_sets_output_mode_to_ntsc() {
+        mixer.outputMode = .hd720p
+        bindings.handleProgramChange(61)
+        XCTAssertEqual(mixer.outputMode, .ntsc4_3)
+    }
+
+    func test_pc_60_is_idempotent_unlike_toggle() {
+        mixer.outputMode = .hd720p
+        bindings.handleProgramChange(60)
+        bindings.handleProgramChange(60)
+        XCTAssertEqual(mixer.outputMode, .hd720p, "PC 60 must always set HD, never flip away")
+    }
+
+    func test_pc_62_enables_keyer() {
+        keyer.isEnabled = false
+        bindings.handleProgramChange(62)
+        XCTAssertTrue(keyer.isEnabled)
+    }
+
+    func test_pc_63_disables_keyer() {
+        keyer.isEnabled = true
+        bindings.handleProgramChange(63)
+        XCTAssertFalse(keyer.isEnabled)
+    }
+
+    func test_pc_62_is_idempotent_unlike_toggle() {
+        keyer.isEnabled = false
+        bindings.handleProgramChange(62)
+        bindings.handleProgramChange(62)
+        XCTAssertTrue(keyer.isEnabled, "PC 62 must always enable, never flip back off")
+    }
+
+    // MARK: - Channel-keyed per-pad FX (CC 23-34)
+
+    func test_cc23_on_channel_0_sets_pad_1_blur() {
+        // Channel 0 = MIDI ch 1 = pad 1 (index 0)
+        bindings.handleCC(cc: 23, value: 127, channel: 0)
+        let blur = pads.pads[0].fxChain.effects.first { $0.name == "Blur" }
+        XCTAssertNotNil(blur, "Blur effect should exist")
+        XCTAssertEqual(blur?.parameters[0].value ?? 0, 6.0, accuracy: 0.05,
+                       "Pad 0 Blur radius should be at top of range")
+    }
+
+    func test_cc23_on_channel_5_sets_pad_6_not_pad_0() {
+        // Snapshot pad 0's Blur BEFORE the channel-5 dispatch so we
+        // can assert it didn't move (we can't rely on a specific
+        // default value across builds).
+        let pad0Blur = pads.pads[0].fxChain.effects.first { $0.name == "Blur" }!
+        let pad0Before = pad0Blur.parameters[0].value
+        let pad5Blur = pads.pads[5].fxChain.effects.first { $0.name == "Blur" }!
+
+        mixer.inspectedPadIndex = 0
+        bindings.handleCC(cc: 23, value: 127, channel: 5)
+
+        XCTAssertEqual(pad0Blur.parameters[0].value, pad0Before, accuracy: 0.01,
+                       "Pad 0 must NOT be affected when channel addresses pad 5")
+        XCTAssertEqual(pad5Blur.parameters[0].value, 6.0, accuracy: 0.05,
+                       "Pad 5 must receive the FX param via channel 5")
+    }
+
+    func test_cc23_on_channel_15_uses_inspected_pad_index() {
+        mixer.inspectedPadIndex = 3
+        bindings.handleCC(cc: 23, value: 127, channel: 15)
+        let pad3Blur = pads.pads[3].fxChain.effects.first { $0.name == "Blur" }
+        XCTAssertEqual(pad3Blur?.parameters[0].value ?? 0, 6.0, accuracy: 0.05,
+                       "Channels 9-15 must keep the inspectedPadIndex semantics")
+    }
+
+    func test_cc14_through_22_ignore_channel() {
+        // NTSC controls (CC 14-22) are NOT in the 23-34 range, so channel
+        // routing must NOT apply — value should land in NTSC state
+        // regardless of channel.
+        bindings.handleCC(cc: 14, value: 127, channel: 5)
+        XCTAssertEqual(ntsc.chromaBoost, 3.0, accuracy: 0.05)
+    }
+
     // MARK: - CC: mixer & master
 
     func test_cc1_position() {

@@ -12,7 +12,9 @@ final class MIDIRouter {
 
     private(set) var lastEventDescription: String = ""
     var onNoteOn: ((Int, Int) -> Void)?
-    var onControlChange: ((Int, Int) -> Void)?
+    /// Called with (cc, value, channel). `channel` is 0-15 (MIDI ch 1-16).
+    /// Receivers that don't care about channel can ignore the third arg.
+    var onControlChange: ((Int, Int, Int) -> Void)?
     var onProgramChange: ((Int) -> Void)?
     /// Forwarded raw bytes for any non-real-time channel-voice message (note/cc/pc).
     /// Used by AutomationEngine to capture takes regardless of routing.
@@ -157,7 +159,7 @@ final class MIDIRouter {
             let cc = Int(voiceBytes[1])
             let value = Int(voiceBytes[2])
             lastEventDescription = "ch\(channel + 1) cc \(cc) val \(value)"
-            onControlChange?(cc, value)
+            onControlChange?(cc, value, channel)
         case 0xC0 where voiceBytes.count >= 2:
             let program = Int(voiceBytes[1])
             lastEventDescription = "ch\(channel + 1) pc \(program)"

@@ -132,8 +132,14 @@ final class MIDIOutputBindings {
         mixer.$outputMode
             .removeDuplicates()
             .dropFirst()
-            .sink { [weak self] _ in
-                self?.send([0xC0, 17, 0])
+            .sink { [weak self] mode in
+                guard let self else { return }
+                // Emit BOTH the legacy toggle (PC 17) and the explicit
+                // setter (PC 60 = HD, PC 61 = NTSC). Legacy receivers
+                // that act on PC 17 keep working; stateless receivers
+                // (Electra One) act on the explicit PC and ignore 17.
+                self.send([0xC0, 17, 0])
+                self.send([0xC0, mode == .hd720p ? 60 : 61, 0])
             }
             .store(in: &cancellables)
         mixer.$inspectedPadIndex
@@ -149,11 +155,13 @@ final class MIDIOutputBindings {
         keyer.$isEnabled
             .removeDuplicates()
             .dropFirst()
-            .sink { [weak self] _ in
-                // PC 18 is a TOGGLE — emitting it always works as long as the
-                // host receiver toggles in response. Our MIDIBindings does, so
-                // round-trip is consistent.
-                self?.send([0xC0, 18, 0])
+            .sink { [weak self] isEnabled in
+                guard let self else { return }
+                // Legacy toggle (PC 18) + explicit setter (PC 62 = on,
+                // PC 63 = off). Both emitted for the same reason as
+                // outputMode above.
+                self.send([0xC0, 18, 0])
+                self.send([0xC0, isEnabled ? 62 : 63, 0])
             }
             .store(in: &cancellables)
 
