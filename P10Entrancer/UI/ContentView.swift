@@ -4,6 +4,7 @@ import AVFoundation
 struct ContentView: View {
     private let appState = AppState.shared
     @State private var entered: Bool = false
+    @State private var showGlobalSettings: Bool = false
 
     var body: some View {
         if !entered {
@@ -48,6 +49,7 @@ struct ContentView: View {
                 ZStack(alignment: .topLeading) {
                     OutputPreviewView(mixerOffscreen: appState.masterMixerOffscreen)
                     statusOverlay
+                    globalSettingsGear
                 }
                 .frame(height: outputH)
                 .frame(maxWidth: .infinity)
@@ -166,6 +168,36 @@ struct ContentView: View {
             .tracking(1.5)
             .foregroundStyle(.white.opacity(0.6))
             .padding(14)
+    }
+
+    /// Big gear in the upper-right of the master preview. Opens the
+    /// app-wide settings sheet (thumbnail quality, NTSC config, MIDI
+    /// devices + traffic).
+    private var globalSettingsGear: some View {
+        VStack {
+            HStack {
+                Spacer()
+                Button { showGlobalSettings = true } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(10)
+                        .background(.black.opacity(0.55))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("global-settings-gear")
+                .padding(14)
+            }
+            Spacer()
+        }
+        .sheet(isPresented: $showGlobalSettings) {
+            GlobalSettingsSheet(
+                appState: appState,
+                ntsc: appState.ntscState,
+                router: MIDIRouter.shared
+            )
+        }
     }
 }
 

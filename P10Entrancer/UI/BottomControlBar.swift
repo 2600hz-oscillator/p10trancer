@@ -13,7 +13,6 @@ struct BottomControlBar: View {
     @ObservedObject var sessions: SessionStore
     var onEndSession: () -> Void
 
-    @State private var showInspector = false
     @State private var showMixer = false
     @State private var showAutomation = false
     @State private var showKeyerControls = false
@@ -39,9 +38,6 @@ struct BottomControlBar: View {
             LiveRecordingsRowView(store: liveRecordings)
         }
         .background(.black)
-        .sheet(isPresented: $showInspector) {
-            InspectorSheet(pads: pads, mixer: mixer, ntsc: ntsc, thermal: thermal)
-        }
         .sheet(isPresented: $showMixer) {
             MixerPanelView(pads: pads, mixer: mixer)
         }
@@ -156,7 +152,6 @@ struct BottomControlBar: View {
             verticalDivider
             mixerButton
             automationButton
-            inspectButton
             sessionButton
             saveSessionButton
             loadSessionButton
@@ -355,16 +350,6 @@ struct BottomControlBar: View {
         }
     }
 
-    private var inspectButton: some View {
-        Button(action: { showInspector = true }) {
-            Text("SETTINGS…")
-                .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12).padding(.vertical, 4)
-                .overlay(Rectangle().strokeBorder(Color.yellow, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
 
     private var mixerButton: some View {
         Button(action: { showMixer = true }) {
@@ -478,104 +463,3 @@ private struct MasterTransportButton: View {
     }
 }
 
-private struct InspectorSheet: View {
-    let pads: PadSystem
-    @ObservedObject var mixer: MixerState
-    @ObservedObject var ntsc: NTSCState
-    @ObservedObject var thermal: ThermalMonitor
-    @ObservedObject var appState: AppState = .shared
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    Text("SETTINGS")
-                        .font(.system(size: 14, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(.white)
-                    Spacer()
-                    Button("CLOSE") { dismiss() }
-                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(.white)
-                }
-                if mixer.outputMode == .ntsc4_3 { ntscSection }
-                performanceSection
-                Spacer()
-            }
-            .padding(20)
-        }
-        .background(.black)
-        .preferredColorScheme(.dark)
-    }
-
-    /// Per-pad preview thumbnail quality — cuts visualizer fps +
-    /// video preview copy rate at lower settings. Audio playback
-    /// and sequencer timing are unaffected; only the on-screen
-    /// pad previews scale back.
-    private var performanceSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("THUMBNAIL QUALITY")
-            HStack(spacing: 0) {
-                ForEach(ThumbnailQuality.allCases) { q in
-                    let selected = appState.thumbnailQuality == q
-                    Button(action: { appState.thumbnailQuality = q }) {
-                        Text(q.label)
-                            .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 32)
-                            .foregroundStyle(selected ? .black : .white)
-                            .background(selected ? Color.white : Color.white.opacity(0.06))
-                            .overlay(Rectangle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            Text("Affects only the per-pad preview render rate. Doesn't change audio or sequencer timing.")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.5))
-        }
-    }
-
-    private var ntscSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("NTSC FX")
-            slider("Chroma boost", $ntsc.chromaBoost, in: 0...3)
-            slider("Luma peak", $ntsc.lumaPeaking, in: 0...3)
-            slider("HSync wobble", $ntsc.hsyncWobble, in: 0...1)
-            slider("Burst phase", $ntsc.burstPhaseShift, in: -0.5...0.5)
-            slider("Subcarrier drift", $ntsc.subcarrierDrift, in: 0...0.5)
-            slider("Y/C delay", $ntsc.ycDelay, in: -8...8)
-            slider("Dropout", $ntsc.dropoutRate, in: 0...1)
-            slider("Luma noise", $ntsc.lumaNoise, in: 0...0.3)
-            slider("Chroma noise", $ntsc.chromaNoise, in: 0...0.3)
-        }
-    }
-
-    private func sectionHeader(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .heavy, design: .monospaced))
-            .tracking(2.0)
-            .foregroundStyle(.white)
-    }
-
-    private func padPicker(_ label: String, _ binding: Binding<Int>) -> some View {
-        HStack {
-            Text(label).font(.system(size: 11, weight: .heavy, design: .monospaced)).foregroundStyle(.white).frame(width: 30)
-            Picker("", selection: binding) {
-                ForEach(0..<PadSystem.padCount, id: \.self) { i in Text("\(i + 1)").tag(i) }
-            }.pickerStyle(.segmented).colorScheme(.dark)
-        }
-    }
-
-    private func slider(_ label: String, _ binding: Binding<Float>, in range: ClosedRange<Float>) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(label).font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.7))
-                Spacer()
-                Text(String(format: "%.2f", binding.wrappedValue))
-                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
-            }
-            Slider(value: binding, in: range).tint(.white)
-        }
-    }
-}

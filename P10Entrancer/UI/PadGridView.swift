@@ -190,12 +190,6 @@ struct PadGridView: View {
         } label: {
             Label("Reset to Bundled", systemImage: "arrow.counterclockwise")
         }
-        Divider()
-        Button {
-            fxSheetPadIndex = index
-        } label: {
-            Label("FX Settings…", systemImage: "slider.horizontal.3")
-        }
     }
 
     /// All the per-pad UI that lives over the pad's VIDEO area (to
@@ -239,34 +233,37 @@ struct PadGridView: View {
                     if let video = pads.pads[index].source as? VideoFileSource {
                         VideoPadOverlays(video: video)
                     }
-                    // Upper-left gear: instrument settings — wavetable
-                    // (WAVECEL) or drum sequencer (ACIDKICK). Only
-                    // appears for instrument-kind sources.
-                    if pads.pads[index].source is InstrumentSource
-                       || pads.pads[index].source is ACIDKICKSource {
-                        VStack {
-                            HStack {
-                                Button {
-                                    if pads.pads[index].source is ACIDKICKSource {
-                                        acidkickSheetPadIndex = index
-                                    } else {
-                                        instrumentSheetPadIndex = index
-                                    }
-                                } label: {
-                                    Image(systemName: "gearshape.fill")
-                                        .font(.system(size: 14, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .padding(6)
-                                        .background(.black.opacity(0.6))
-                                        .clipShape(Circle())
+                    // Upper-left gear: opens that pad's settings sheet.
+                    // Routed by source kind:
+                    //   ACIDKICK → drum sequencer sheet
+                    //   Instrument (wavetable) → instrument sheet
+                    //   anything else → per-pad FX settings
+                    // Always visible so users don't have to long-press
+                    // to reach FX.
+                    VStack {
+                        HStack {
+                            Button {
+                                if pads.pads[index].source is ACIDKICKSource {
+                                    acidkickSheetPadIndex = index
+                                } else if pads.pads[index].source is InstrumentSource {
+                                    instrumentSheetPadIndex = index
+                                } else {
+                                    fxSheetPadIndex = index
                                 }
-                                .buttonStyle(.plain)
-                                .padding(.top, 6)
-                                .padding(.leading, 6)
-                                Spacer()
+                            } label: {
+                                Image(systemName: "gearshape.fill")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(6)
+                                    .background(.black.opacity(0.6))
+                                    .clipShape(Circle())
                             }
+                            .buttonStyle(.plain)
+                            .padding(.top, 6)
+                            .padding(.leading, 6)
                             Spacer()
                         }
+                        Spacer()
                     }
             PadFooterControls(pad: pads.pads[index], padIndex: index)
             // Transcode-in-flight overlay. Lives at the TOP of the

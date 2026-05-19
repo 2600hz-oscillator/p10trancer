@@ -2,13 +2,23 @@ import Foundation
 import CoreMIDI
 
 @MainActor
-final class MIDIRouter {
+final class MIDIRouter: ObservableObject {
     static let shared = MIDIRouter()
 
     private var client: MIDIClientRef = 0
     private var inputPort: MIDIPortRef = 0
     private var connectedSources: Set<MIDIEndpointRef> = []
     private var isStarted = false
+
+    /// Names of MIDI sources we're currently subscribed to. Driven by
+    /// `connectAllSources()`; the global settings UI watches this to
+    /// render a "Connected devices" list.
+    @Published private(set) var connectedDeviceNames: [String] = []
+
+    /// Ring buffer of recent MIDI event descriptions for the live
+    /// traffic view in global settings. Newest at index 0.
+    @Published private(set) var recentEvents: [String] = []
+    private static let recentEventsCap = 60
 
     private(set) var lastEventDescription: String = ""
     var onNoteOn: ((Int, Int) -> Void)?
@@ -75,6 +85,13 @@ final class MIDIRouter {
                 P10Logger.log("[MIDIRouter] connect failed (\(status)): \(name)")
             }
         }
+        refreshConnectedDeviceNames()
+    }
+
+    private func refreshConnectedDeviceNames() {
+        connectedDeviceNames = connectedSources
+            .compactMap { Self.endpointName($0) }
+            .sorted()
     }
 
     private static func uniqueID(_ endpoint: MIDIEndpointRef) -> Int32 {
@@ -153,19 +170,27 @@ final class MIDIRouter {
         case 0x90 where voiceBytes.count >= 3 && voiceBytes[2] > 0:
             let note = Int(voiceBytes[1])
             let velocity = Int(voiceBytes[2])
-            lastEventDescription = "ch\(channel + 1) note \(note) vel \(velocity)"
+            recordEvent("ch\(channel + 1) note \(note) vel \(velocity)")
             onNoteOn?(note, velocity)
         case 0xB0 where voiceBytes.count >= 3:
             let cc = Int(voiceBytes[1])
             let value = Int(voiceBytes[2])
-            lastEventDescription = "ch\(channel + 1) cc \(cc) val \(value)"
+            recordEvent("ch\(channel + 1) cc \(cc) val \(value)")
             onControlChange?(cc, value, channel)
         case 0xC0 where voiceBytes.count >= 2:
             let program = Int(voiceBytes[1])
-            lastEventDescription = "ch\(channel + 1) pc \(program)"
+            recordEvent("ch\(channel + 1) pc \(program)")
             onProgramChange?(program)
         default:
             break
+        }
+    }
+
+    private func recordEvent(_ description: String) {
+        lastEventDescription = description
+        recentEvents.insert(description, at: 0)
+        if recentEvents.count > Self.recentEventsCap {
+            recentEvents.removeLast(recentEvents.count - Self.recentEventsCap)
         }
     }
 
