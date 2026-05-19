@@ -187,6 +187,68 @@ final class MIDIBindingsTests: XCTestCase {
                        "Channels 9-15 must keep the inspectedPadIndex semantics")
     }
 
+    // MARK: - Explicit FX on/off via channel-keyed CC 35-40
+
+    func test_cc35_channel_4_enables_pad_5_blur() {
+        let blur = pads.pads[4].fxChain.effects.first { $0.name == "Blur" }!
+        XCTAssertFalse(blur.isEnabled, "default should be disabled")
+        bindings.handleCC(cc: 35, value: 127, channel: 4)
+        XCTAssertTrue(blur.isEnabled, "CC 35 value=127 on channel 4 should enable pad 5's Blur")
+    }
+
+    func test_cc35_value_below_64_disables_blur() {
+        let blur = pads.pads[2].fxChain.effects.first { $0.name == "Blur" }!
+        bindings.handleCC(cc: 35, value: 127, channel: 2)
+        XCTAssertTrue(blur.isEnabled)
+        bindings.handleCC(cc: 35, value: 0, channel: 2)
+        XCTAssertFalse(blur.isEnabled, "value < 64 must turn the effect off")
+    }
+
+    func test_cc35_40_each_maps_to_correct_effect_name() {
+        let cases: [(cc: Int, effect: String)] = [
+            (35, "Blur"), (36, "Chroma"), (37, "YUV Phaser"),
+            (38, "Luma Phaser"), (39, "Edge Enhance"), (40, "Feedback"),
+        ]
+        for (cc, name) in cases {
+            // Reset
+            let chain = pads.pads[0].fxChain
+            for fx in chain.effects { fx.isEnabled = false }
+            bindings.handleCC(cc: cc, value: 127, channel: 0)
+            let target = chain.effects.first { $0.name == name }
+            XCTAssertNotNil(target, "Effect \(name) must exist")
+            XCTAssertTrue(target?.isEnabled ?? false, "CC \(cc) must turn on \(name)")
+            // The OTHER effects should remain off.
+            for fx in chain.effects where fx.name != name {
+                XCTAssertFalse(fx.isEnabled, "\(fx.name) must NOT be turned on by CC \(cc)")
+            }
+        }
+    }
+
+    func test_cc35_on_channel_9_through_15_is_no_op() {
+        // Above the per-pad channel range — should NOT touch any
+        // pad's enable state.
+        for pad in pads.pads { pad.fxChain.effects.forEach { $0.isEnabled = false } }
+        bindings.handleCC(cc: 35, value: 127, channel: 9)
+        bindings.handleCC(cc: 35, value: 127, channel: 15)
+        for pad in pads.pads {
+            for fx in pad.fxChain.effects {
+                XCTAssertFalse(fx.isEnabled, "channel >= 9 must not enable any effect")
+            }
+        }
+    }
+
+    // MARK: - CC 23-34 no longer auto-enables
+
+    func test_cc23_channel_keyed_does_not_auto_enable() {
+        let blur = pads.pads[3].fxChain.effects.first { $0.name == "Blur" }!
+        blur.isEnabled = false
+        bindings.handleCC(cc: 23, value: 127, channel: 3)
+        XCTAssertFalse(blur.isEnabled,
+                       "Moving the param via CC must NOT flip isEnabled automatically — that's the on/off CC's job now")
+        XCTAssertEqual(blur.parameters[0].value, 6.0, accuracy: 0.05,
+                       "Param value must still update even though the effect is off")
+    }
+
     func test_cc14_through_22_ignore_channel() {
         // NTSC controls (CC 14-22) are NOT in the 23-34 range, so channel
         // routing must NOT apply — value should land in NTSC state
@@ -305,15 +367,8 @@ final class MIDIBindingsTests: XCTestCase {
         let blur = pads.pads[3].fxChain.effects.first { $0.name == "Blur" }
         XCTAssertNotNil(blur)
         XCTAssertEqual(blur?.parameters[0].value ?? 0, 6.0, accuracy: 0.01)
-        XCTAssertTrue(blur?.isEnabled ?? false)
-    }
-
-    func test_cc23_zero_disables_blur() {
-        mixer.inspectedPadIndex = 3
-        bindings.handleCC(cc: 23, value: 100)
-        bindings.handleCC(cc: 23, value: 0)
-        let blur = pads.pads[3].fxChain.effects.first { $0.name == "Blur" }
-        XCTAssertFalse(blur?.isEnabled ?? true)
+        // Note: CC 23 no longer auto-enables. Explicit enable is via
+        // channel-keyed CC 35-40. The radius value still updates.
     }
 
     func test_cc32_feedback_mix_drives_inspected_pad_only() {
@@ -321,9 +376,10 @@ final class MIDIBindingsTests: XCTestCase {
         bindings.handleCC(cc: 32, value: 127)
         let fbPad5 = pads.pads[5].fxChain.effects.first { $0.name == "Feedback" }
         let fbPad6 = pads.pads[6].fxChain.effects.first { $0.name == "Feedback" }
-        XCTAssertEqual(fbPad5?.parameters[0].value ?? 0, 1.0, accuracy: 0.01)
-        XCTAssertTrue(fbPad5?.isEnabled ?? false)
-        XCTAssertFalse(fbPad6?.isEnabled ?? true, "Feedback on a different pad must NOT enable")
+        XCTAssertEqual(fbPad5?.parameters[0].value ?? 0, 1.0, accuracy: 0.01,
+                       "Inspected pad's Feedback mix should update")
+        XCTAssertNotEqual(fbPad6?.parameters[0].value ?? 0, 1.0,
+                          "Different pad's Feedback mix should NOT change")
     }
 
     // MARK: - Per-pad play / mute toggles (Notes 72-80 / 84-92)

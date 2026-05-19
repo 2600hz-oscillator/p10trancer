@@ -357,7 +357,7 @@ struct BottomControlBar: View {
 
     private var inspectButton: some View {
         Button(action: { showInspector = true }) {
-            Text("INSPECT…")
+            Text("SETTINGS…")
                 .font(.system(size: 11, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12).padding(.vertical, 4)
@@ -485,13 +485,12 @@ private struct InspectorSheet: View {
     @ObservedObject var thermal: ThermalMonitor
     @ObservedObject var appState: AppState = .shared
     @Environment(\.dismiss) private var dismiss
-    @State private var showVideoImporter = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text("INSPECTOR")
+                    Text("SETTINGS")
                         .font(.system(size: 14, weight: .heavy, design: .monospaced))
                         .foregroundStyle(.white)
                     Spacer()
@@ -501,27 +500,12 @@ private struct InspectorSheet: View {
                 }
                 if mixer.outputMode == .ntsc4_3 { ntscSection }
                 performanceSection
-                fxSection
                 Spacer()
             }
             .padding(20)
         }
         .background(.black)
         .preferredColorScheme(.dark)
-        .fileImporter(
-            isPresented: $showVideoImporter,
-            allowedContentTypes: [.movie, .video, .mpeg4Movie, .quickTimeMovie],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    AppState.shared.loadUserVideo(from: url, at: mixer.inspectedPadIndex)
-                }
-            case .failure(let error):
-                P10Logger.log("[InspectorSheet] file import failed: \(error)")
-            }
-        }
     }
 
     /// Per-pad preview thumbnail quality — cuts visualizer fps +
@@ -564,52 +548,6 @@ private struct InspectorSheet: View {
             slider("Dropout", $ntsc.dropoutRate, in: 0...1)
             slider("Luma noise", $ntsc.lumaNoise, in: 0...0.3)
             slider("Chroma noise", $ntsc.chromaNoise, in: 0...0.3)
-        }
-    }
-
-    private var fxSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("PER-PAD FX")
-            HStack {
-                Text("Pad").foregroundStyle(.white).font(.system(size: 12, design: .monospaced))
-                Picker("", selection: $mixer.inspectedPadIndex) {
-                    ForEach(0..<PadSystem.padCount, id: \.self) { i in Text("\(i + 1)").tag(i) }
-                }.pickerStyle(.segmented).colorScheme(.dark)
-            }
-            sourcePicker
-            FXInspectorView(pads: pads, mixer: mixer)
-        }
-    }
-
-    private var sourcePicker: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("SOURCE")
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(.white.opacity(0.5))
-            HStack(spacing: 8) {
-                Button("Load Video…") {
-                    showVideoImporter = true
-                }
-                .buttonStyle(.bordered)
-                .tint(.blue)
-                Button("Master Feedback") {
-                    AppState.shared.setMasterFeedbackSource(at: mixer.inspectedPadIndex)
-                }
-                .buttonStyle(.bordered)
-                .tint(.purple)
-                Button("Instrument") {
-                    AppState.shared.setInstrumentSource(at: mixer.inspectedPadIndex)
-                }
-                .buttonStyle(.bordered)
-                .tint(.orange)
-                Button("Reset to Bundled") {
-                    AppState.shared.reloadVideoSource(at: mixer.inspectedPadIndex)
-                }
-                .buttonStyle(.bordered)
-                .tint(.gray)
-            }
-            .font(.system(size: 11, design: .monospaced))
         }
     }
 

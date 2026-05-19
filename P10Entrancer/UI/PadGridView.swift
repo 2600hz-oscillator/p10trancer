@@ -14,6 +14,10 @@ struct PadGridView: View {
     /// pad-source changes without disappearing mid-edit.
     @State private var instrumentSheetPadIndex: Int? = nil
     @State private var acidkickSheetPadIndex: Int? = nil
+    /// When non-nil, opens the per-pad FX settings sheet for that pad.
+    /// Mirrors the instrument-sheet pattern so the sheet survives
+    /// underlying source changes.
+    @State private var fxSheetPadIndex: Int? = nil
 
     var body: some View {
         ZStack {
@@ -66,6 +70,14 @@ struct PadGridView: View {
             if let drums = pads.pads[target.id].source as? ACIDKICKSource {
                 ACIDKICKSettingsSheet(source: drums)
             }
+        }
+        // Per-pad FX settings sheet — opened from the long-press
+        // context menu's "FX Settings…" item.
+        .sheet(item: Binding(
+            get: { fxSheetPadIndex.map { InstrumentSheetTarget(id: $0) } },
+            set: { fxSheetPadIndex = $0?.id }
+        )) { target in
+            PadFXSettingsSheet(pad: pads.pads[target.id], padIndex: target.id)
         }
     }
 
@@ -180,9 +192,9 @@ struct PadGridView: View {
         }
         Divider()
         Button {
-            mixer.inspectedPadIndex = index
+            fxSheetPadIndex = index
         } label: {
-            Label("Inspect FX", systemImage: "slider.horizontal.3")
+            Label("FX Settings…", systemImage: "slider.horizontal.3")
         }
     }
 

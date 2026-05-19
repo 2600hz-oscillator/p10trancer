@@ -185,6 +185,14 @@ final class MIDIBindings {
             dispatchPadFX(cc: cc, normalized: v, padIndex: channel)
             return
         }
+        // Channel-keyed FX on/off (CC 35-40 on channels 0-8). Explicit
+        // setters per (pad, effect) — value >= 64 = on, < 64 = off.
+        // No auto-enable on param changes; the bit is the only thing
+        // that flips isEnabled.
+        if (35...40).contains(cc), (0...8).contains(channel) {
+            dispatchPadFXEnable(cc: cc, on: value >= 64, padIndex: channel)
+            return
+        }
         switch cc {
         case 1:
             mixer.position = v
@@ -284,17 +292,31 @@ final class MIDIBindings {
         guard paramIndex < params.count else { return }
         let scaled = range.lowerBound + normalized * (range.upperBound - range.lowerBound)
         params[paramIndex].value = scaled
-        // Auto-enable when any param is non-zero (treating 0 as "off").
-        // Special-case Feedback's decay/zoom which have non-zero defaults at "off".
-        let mainOn: Bool
-        switch name {
-        case "Feedback":
-            // Treat feedback as on whenever Mix (param 0) is non-zero.
-            mainOn = (effect.parameters.first?.value ?? 0) > 0.001
-        default:
-            mainOn = effect.parameters.contains { $0.value > 0.001 }
-        }
-        effect.isEnabled = mainOn
+        // No auto-enable: the user must explicitly enable an effect
+        // via the per-pad FX sheet OR via MIDI CC 35-40. Param values
+        // can be pre-set while the effect is off; flipping on then
+        // applies them. This matches the behavior of the new sheet UI
+        // and gives stateless controllers (Electra One) a clean
+        // separation between "set param" and "turn it on".
+    }
+
+    /// Maps the six per-pad FX on/off CCs to the matching effect
+    /// inside `padIndex`'s FX chain.
+    private static let fxEnableCCNames: [Int: String] = [
+        35: "Blur",
+        36: "Chroma",
+        37: "YUV Phaser",
+        38: "Luma Phaser",
+        39: "Edge Enhance",
+        40: "Feedback",
+    ]
+
+    private func dispatchPadFXEnable(cc: Int, on: Bool, padIndex: Int) {
+        guard let name = Self.fxEnableCCNames[cc] else { return }
+        guard pads.pads.indices.contains(padIndex) else { return }
+        let chain = pads.pads[padIndex].fxChain
+        guard let effect = chain.effects.first(where: { $0.name == name }) else { return }
+        effect.isEnabled = on
     }
 }
 
