@@ -233,14 +233,14 @@ struct PadGridView: View {
                     if let video = pads.pads[index].source as? VideoFileSource {
                         VideoPadOverlays(video: video)
                     }
-                    // Upper-left gear: opens that pad's settings sheet.
-                    // Routed by source kind:
+                    // Bottom-left gear: opens that pad's settings sheet.
+                    // Same position as the FX pads (KEYER/FEEDBACK/XYZ)
+                    // for visual consistency. Routed by source kind:
                     //   ACIDKICK → drum sequencer sheet
                     //   Instrument (wavetable) → instrument sheet
                     //   anything else → per-pad FX settings
-                    // Always visible so users don't have to long-press
-                    // to reach FX.
                     VStack {
+                        Spacer()
                         HStack {
                             Button {
                                 if pads.pads[index].source is ACIDKICKSource {
@@ -259,11 +259,10 @@ struct PadGridView: View {
                                     .clipShape(Circle())
                             }
                             .buttonStyle(.plain)
-                            .padding(.top, 6)
+                            .padding(.bottom, 6)
                             .padding(.leading, 6)
                             Spacer()
                         }
-                        Spacer()
                     }
             PadFooterControls(pad: pads.pads[index], padIndex: index)
             // Transcode-in-flight overlay. Lives at the TOP of the
