@@ -67,7 +67,6 @@ struct ContentView: View {
                             macroTitle: "MACRO 1",
                             channelTitle: "CH1",
                             channelAccent: .cyan,
-                            routedPad: routedPad(for: appState.mixer.ch1Source),
                             engine: appState.lfoEngine,
                             transport: appState.transport
                         )
@@ -99,7 +98,6 @@ struct ContentView: View {
                             macroTitle: "MACRO 2",
                             channelTitle: "CH2",
                             channelAccent: .orange,
-                            routedPad: routedPad(for: appState.mixer.ch2Source),
                             engine: appState.lfoEngine,
                             transport: appState.transport
                         )
@@ -132,34 +130,6 @@ struct ContentView: View {
         }
         .ignoresSafeArea()
         .background(.black)
-    }
-
-    /// Resolves a channel's current source to the PadSlot whose
-    /// audioPlayer the VU meter should observe. Every channel kind
-    /// has an underlying source pad somewhere in its chain — that's
-    /// the pad whose audio is contributing — so the VU bounces
-    /// whether the channel is routed direct to a pad, through a
-    /// keyer, through the feedback unit, or through XYZ.
-    private func routedPad(for source: ChannelSource) -> PadSlot? {
-        let padIndex: Int?
-        switch source {
-        case .pad(let i):
-            padIndex = i
-        case .keyer:
-            padIndex = appState.keyerSystem.keyer.foregroundPadIndex
-        case .feedback:
-            padIndex = appState.feedbackSystem.unit.sourcePadIndex
-        case .xyz:
-            if case .pad(let p) = appState.xyzSystem.unit.inputSource {
-                padIndex = p
-            } else {
-                padIndex = nil
-            }
-        }
-        guard let p = padIndex, appState.pads.pads.indices.contains(p) else {
-            return nil
-        }
-        return appState.pads.pads[p]
     }
 
     private var statusOverlay: some View {
