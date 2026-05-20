@@ -19,6 +19,11 @@ struct OutputTexturePreview: UIViewRepresentable {
         view.enableSetNeedsDisplay = false
         view.preferredFramesPerSecond = 60
         view.autoResizeDrawable = true
+        // Explicit black clear so undefined / partial-write frames
+        // (the first few ticks while the FX renderer warms up or
+        // while SwiftUI's layout is still resolving the drawable
+        // size) come up solid black instead of a stale-memory slash.
+        view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         view.delegate = context.coordinator
         context.coordinator.attach(view: view)
         RenderEngine.shared.register(context.coordinator)
@@ -62,8 +67,15 @@ struct OutputTexturePreview: UIViewRepresentable {
         }
 
         private func drawFrame() {
-            guard let view = view,
-                  let drawable = view.currentDrawable,
+            guard let view = view else { return }
+            // Skip ticks where the drawable is too small to be a real
+            // pad cell — SwiftUI emits intermediate layout passes at
+            // 0×0 / 1×N before the GeometryReader settles. Drawing
+            // into those produces the "slash of content at the top"
+            // visual that bleeds through after the drawable expands.
+            let size = view.drawableSize
+            guard size.width >= 16, size.height >= 16 else { return }
+            guard let drawable = view.currentDrawable,
                   let descriptor = view.currentRenderPassDescriptor,
                   let pipeline = pipeline,
                   let cmd = MetalContext.shared.commandQueue.makeCommandBuffer(),
