@@ -11,6 +11,7 @@ enum SessionCapture {
                          mixer: MixerState,
                          ntsc: NTSCState,
                          hdPost: HDPostState,
+                         xyJoystick: XYJoystickState,
                          cameras: CameraRegistry,
                          liveRecordings: LiveRecordingsStore) -> SessionSpec {
         var padSpecs: [SessionSpec.PadSpec] = []
@@ -62,6 +63,13 @@ enum SessionCapture {
             bloomThresh: hdPost.bloomThresh
         )
 
+        let joystickSpec = SessionSpec.XYJoystickSpec(
+            x: xyJoystick.x,
+            y: xyJoystick.y,
+            xTargetID: xyJoystick.xTargetID,
+            yTargetID: xyJoystick.yTargetID
+        )
+
         let reel = liveRecordings.recent.map { $0.url.lastPathComponent }
 
         return SessionSpec(
@@ -71,6 +79,7 @@ enum SessionCapture {
             mixer: mixerSpec,
             ntsc: ntscSpec,
             hdPost: hdPostSpec,
+            xyJoystick: joystickSpec,
             liveRecordings: reel
         )
     }
@@ -121,6 +130,14 @@ enum SessionCapture {
             appState.hdPostState.brightness = hd.brightness
             appState.hdPostState.bloom = hd.bloom
             appState.hdPostState.bloomThresh = hd.bloomThresh
+        }
+        // X/Y joystick — optional. Apply assignments first so the
+        // value writes route to the right targets when x/y change.
+        if let j = spec.xyJoystick {
+            appState.xyJoystick.xTargetID = j.xTargetID
+            appState.xyJoystick.yTargetID = j.yTargetID
+            appState.xyJoystick.x = j.x
+            appState.xyJoystick.y = j.y
         }
     }
 

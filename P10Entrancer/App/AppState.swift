@@ -49,6 +49,7 @@ final class AppState: ObservableObject {
     /// All per-pad LFOs (9 source pads + 2 keyers + 1 feedback).
     /// Subscribes to `transport.tickPublisher` for evaluation.
     let lfoEngine: LFOEngine
+    let xyJoystick = XYJoystickState()
 
     /// Convenience access to the single atomic keyer state.
     var keyerState: KeyerState { keyerSystem.keyer }
@@ -84,13 +85,15 @@ final class AppState: ObservableObject {
             pads: pads,
             keyer: keyerSystem.keyer,
             ntsc: ntscState,
-            recorder: recorder
+            recorder: recorder,
+            xyJoystick: self.xyJoystick
         )
         self.midiOutputBindings = MIDIOutputBindings(
             mixer: mixer,
             pads: pads,
             keyer: keyerSystem.keyer,
-            ntsc: ntscState
+            ntsc: ntscState,
+            xyJoystick: self.xyJoystick
         )
         self.midiBindings.output = self.midiOutputBindings
         self.automation = AutomationEngine()
@@ -173,6 +176,7 @@ final class AppState: ObservableObject {
         screenshotCapturer.start()
         wireAudioRouting()
         registerLFOTargets()
+        xyJoystick.attach(engine: lfoEngine)
         // Launch-silent invariant: every pad starts muted so audio
         // never blasts on a fresh launch (including session loads that
         // had unmuted pads). The master mixer is now pinned at 1.0;
@@ -251,6 +255,7 @@ final class AppState: ObservableObject {
             mixer: mixer,
             ntsc: ntscState,
             hdPost: hdPostState,
+            xyJoystick: xyJoystick,
             cameras: cameras,
             liveRecordings: liveRecordings
         )
@@ -317,6 +322,7 @@ final class AppState: ObservableObject {
         // (LFOEngine.availableTargets(forSlot:) filters per slot).
         lfoEngine.registerTargets(LFOTargets.forMixer(mixer))
         lfoEngine.registerTargets(LFOTargets.forHDPost(hdPostState))
+        lfoEngine.registerTargets(LFOTargets.forNTSC(ntscState))
 
         // FX slot LFO plumbing: the engine's slot resolver maps each
         // fxslot-N to the underlying FX unit's slot ID so the slot's

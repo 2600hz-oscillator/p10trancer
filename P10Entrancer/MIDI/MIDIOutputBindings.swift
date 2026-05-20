@@ -15,13 +15,16 @@ final class MIDIOutputBindings {
     private let pads: PadSystem
     private let keyer: KeyerState
     private let ntsc: NTSCState
+    private let xyJoystick: XYJoystickState?
     private var cancellables = Set<AnyCancellable>()
 
-    init(mixer: MixerState, pads: PadSystem, keyer: KeyerState, ntsc: NTSCState) {
+    init(mixer: MixerState, pads: PadSystem, keyer: KeyerState,
+         ntsc: NTSCState, xyJoystick: XYJoystickState? = nil) {
         self.mixer = mixer
         self.pads = pads
         self.keyer = keyer
         self.ntsc = ntsc
+        self.xyJoystick = xyJoystick
     }
 
     /// Per-pad subscriptions to source.isPlaying / audioPlayer.isMuted.
@@ -35,12 +38,30 @@ final class MIDIOutputBindings {
         wireChannelsAndModes()
         wireKeyerAndNTSC()
         wirePerPadPlayAndMute()
+        wireXYJoystick()
         // Re-wire the per-pad publishers when sources change.
         let prior = pads.onSourceChanged
         pads.onSourceChanged = { [weak self] in
             prior?()
             self?.wirePerPadPlayAndMute()
         }
+    }
+
+    private func wireXYJoystick() {
+        guard let joy = xyJoystick else { return }
+        // X/Y joystick → CC 70 (X) and CC 71 (Y). Recorded into
+        // automation takes via MIDIOutput.onSent, replayed back into
+        // MIDIBindings.handleCC.
+        joy.$x
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] v in self?.sendCC(70, v) }
+            .store(in: &cancellables)
+        joy.$y
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] v in self?.sendCC(71, v) }
+            .store(in: &cancellables)
     }
 
     /// Subscribe to each pad's source.isPlaying and audioPlayer.isMuted.

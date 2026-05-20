@@ -16,6 +16,9 @@ struct SessionSpec: Codable {
     /// won't carry this field. When nil on load, HD post-processing
     /// stays at neutral defaults.
     var hdPost: HDPostSpec? = nil
+    /// X/Y joystick state. Optional for back-compat with sessions
+    /// saved before the joystick existed.
+    var xyJoystick: XYJoystickSpec? = nil
     var liveRecordings: [String]   // basenames, relative to Documents/UserVideos/
 
     enum PadSourceKind: String, Codable {
@@ -82,6 +85,13 @@ struct SessionSpec: Codable {
         var brightness: Float
         var bloom: Float
         var bloomThresh: Float
+    }
+
+    struct XYJoystickSpec: Codable {
+        var x: Float
+        var y: Float
+        var xTargetID: String
+        var yTargetID: String
     }
 
     struct NTSCSpec: Codable {

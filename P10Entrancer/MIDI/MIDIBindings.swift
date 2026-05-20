@@ -11,6 +11,7 @@ final class MIDIBindings {
     private let ntsc: NTSCState?
     private let recorder: MixerRecorder?
     private let appState: AppState?
+    private let xyJoystick: XYJoystickState?
     weak var output: MIDIOutputBindings?
 
     init(
@@ -19,7 +20,8 @@ final class MIDIBindings {
         keyer: KeyerState? = nil,
         ntsc: NTSCState? = nil,
         recorder: MixerRecorder? = nil,
-        appState: AppState? = nil
+        appState: AppState? = nil,
+        xyJoystick: XYJoystickState? = nil
     ) {
         self.mixer = mixer
         self.pads = pads
@@ -27,6 +29,7 @@ final class MIDIBindings {
         self.ntsc = ntsc
         self.recorder = recorder
         self.appState = appState
+        self.xyJoystick = xyJoystick
     }
 
     func attach(to router: MIDIRouter) {
@@ -225,6 +228,12 @@ final class MIDIBindings {
             ntsc?.chromaNoise = v * 0.3
         case 22:
             ntsc?.lumaPeaking = v * 3.0
+
+        // X/Y joystick — 70=X, 71=Y. Values in [0,1].
+        case 70:
+            xyJoystick?.x = v
+        case 71:
+            xyJoystick?.y = v
 
         // Per-pad FX params for the currently-inspected pad. Each CC drives
         // one parameter; setting > 0 implicitly enables the effect, setting

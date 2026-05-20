@@ -207,6 +207,13 @@ final class LFOEngine: ObservableObject {
 
     func target(id: String) -> LFOTarget? { targetsByID[id] }
 
+    /// All registered targets, sorted by display name. Used by views
+    /// that need the full target catalog (e.g. the X/Y joystick's
+    /// assignment picker) rather than a slot-scoped subset.
+    var allTargets: [LFOTarget] {
+        targetsByID.values.sorted { $0.displayName < $1.displayName }
+    }
+
     private func tick() {
         // First, gather the set of target ids that are currently
         // driven by any LFO assignment.

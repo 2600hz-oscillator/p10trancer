@@ -290,6 +290,51 @@ enum LFOTargets {
         ]
     }
 
+    /// NTSC output pipeline targets. Global; intended for macro LFOs
+    /// and the X/Y joystick. Only takes effect when output mode is
+    /// NTSC 4:3, but the targets are always registered so the user
+    /// can assign + tweak ahead of switching modes.
+    static func forNTSC(_ state: NTSCState) -> [LFOTarget] {
+        return [
+            LFOTarget(id: "ntsc.chromaBoost",
+                      displayName: "NTSC: Chroma boost", range: 0...3,
+                      getBase: { state.chromaBoost },
+                      setEffective: { state.chromaBoost = $0 }),
+            LFOTarget(id: "ntsc.lumaPeaking",
+                      displayName: "NTSC: Luma peak", range: 0...3,
+                      getBase: { state.lumaPeaking },
+                      setEffective: { state.lumaPeaking = $0 }),
+            LFOTarget(id: "ntsc.hsyncWobble",
+                      displayName: "NTSC: HSync wobble", range: 0...1,
+                      getBase: { state.hsyncWobble },
+                      setEffective: { state.hsyncWobble = $0 }),
+            LFOTarget(id: "ntsc.burstPhaseShift",
+                      displayName: "NTSC: Burst phase", range: -0.5...0.5,
+                      getBase: { state.burstPhaseShift },
+                      setEffective: { state.burstPhaseShift = $0 }),
+            LFOTarget(id: "ntsc.subcarrierDrift",
+                      displayName: "NTSC: Subcarrier drift", range: 0...0.5,
+                      getBase: { state.subcarrierDrift },
+                      setEffective: { state.subcarrierDrift = $0 }),
+            LFOTarget(id: "ntsc.ycDelay",
+                      displayName: "NTSC: Y/C delay", range: -8...8,
+                      getBase: { state.ycDelay },
+                      setEffective: { state.ycDelay = $0 }),
+            LFOTarget(id: "ntsc.dropoutRate",
+                      displayName: "NTSC: Dropout", range: 0...1,
+                      getBase: { state.dropoutRate },
+                      setEffective: { state.dropoutRate = $0 }),
+            LFOTarget(id: "ntsc.lumaNoise",
+                      displayName: "NTSC: Luma noise", range: 0...0.3,
+                      getBase: { state.lumaNoise },
+                      setEffective: { state.lumaNoise = $0 }),
+            LFOTarget(id: "ntsc.chromaNoise",
+                      displayName: "NTSC: Chroma noise", range: 0...0.3,
+                      getBase: { state.chromaNoise },
+                      setEffective: { state.chromaNoise = $0 }),
+        ]
+    }
+
     /// HD output post-processing targets. Like the NTSC sliders, these
     /// are global and intended for the macro LFOs.
     static func forHDPost(_ state: HDPostState) -> [LFOTarget] {

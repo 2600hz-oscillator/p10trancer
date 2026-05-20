@@ -49,6 +49,7 @@ struct ContentView: View {
                 ZStack(alignment: .topLeading) {
                     OutputPreviewView(mixerOffscreen: appState.masterMixerOffscreen)
                     statusOverlay
+                    joystickOverlay
                     globalSettingsGear
                 }
                 .frame(height: outputH)
@@ -156,6 +157,26 @@ struct ContentView: View {
             .tracking(1.5)
             .foregroundStyle(.white.opacity(0.6))
             .padding(14)
+    }
+
+    /// X/Y joystick overlay in the upper-right of the master preview,
+    /// just below the global-settings gear. Macro-style two-axis
+    /// control surface; assign any pair of LFO-assignable targets to
+    /// X and Y via the ASSIGN button.
+    private var joystickOverlay: some View {
+        VStack {
+            HStack {
+                Spacer()
+                XYJoystickView(
+                    state: appState.xyJoystick,
+                    engine: appState.lfoEngine
+                )
+                .frame(width: 130)
+                .padding(.top, 56)   // below the global-settings gear
+                .padding(.trailing, 14)
+            }
+            Spacer()
+        }
     }
 
     /// Big gear in the upper-right of the master preview. Opens the

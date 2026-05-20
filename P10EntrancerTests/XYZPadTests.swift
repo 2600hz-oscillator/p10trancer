@@ -62,6 +62,7 @@ final class XYZPadTests: XCTestCase {
             mixer: app.mixer,
             ntsc: app.ntscState,
             hdPost: app.hdPostState,
+            xyJoystick: app.xyJoystick,
             cameras: app.cameras,
             liveRecordings: app.liveRecordings
         )
