@@ -49,45 +49,6 @@ struct BottomControlBar: View {
         .sheet(isPresented: $showSession) {
             SessionPanelView(store: sessions, performances: AppState.shared.performances)
         }
-        .alert("End session?", isPresented: $endSessionAlertShown) {
-            Button("Cancel", role: .cancel) {}
-            if sessions.hasUnsavedChanges {
-                Button("Save & End") {
-                    endSessionSaveDraft = ""
-                    showSaveBeforeEndAlert = true
-                }
-                Button("End Without Saving", role: .destructive) { onEndSession() }
-            } else {
-                Button("End") { onEndSession() }
-            }
-        } message: {
-            Text(sessions.hasUnsavedChanges
-                 ? "You have unsaved changes. Save before ending?"
-                 : "Returns to the splash screen and stops cameras / MIDI / render.")
-        }
-        .alert("Save session before ending", isPresented: $showSaveBeforeEndAlert) {
-            TextField("Session name", text: $endSessionSaveDraft)
-            Button("Cancel", role: .cancel) {}
-            Button("Save & End") {
-                let trimmed = endSessionSaveDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    _ = AppState.shared.saveCurrentSession(as: trimmed)
-                }
-                onEndSession()
-            }
-        }
-        .alert("Save Session", isPresented: $saveAlertShown) {
-            TextField("Session name", text: $saveDraft)
-            Button("Cancel", role: .cancel) {}
-            Button("Save") {
-                let trimmed = saveDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    _ = AppState.shared.saveCurrentSession(as: trimmed)
-                }
-            }
-        } message: {
-            Text("Saves pads, sources, FX params, channel routing, NTSC settings — everything except play state and live LFO phase.")
-        }
         .confirmationDialog("Load Session",
                             isPresented: $loadDialogShown,
                             titleVisibility: .visible) {
@@ -168,6 +129,11 @@ struct BottomControlBar: View {
         .buttonStyle(.plain)
     }
 
+    /// END SESSION button + its two alerts. Stacking all four alerts
+    /// on the BottomControlBar's outer body caused spurious
+    /// presentation at launch on iPadOS 17/18. Attaching each alert
+    /// to its own leaf view (one button each) lets SwiftUI scope the
+    /// presentation correctly — no cross-talk with the SAVE alert.
     private var endSessionButton: some View {
         Button(action: { endSessionAlertShown = true }) {
             Text("END SESSION")
@@ -177,6 +143,33 @@ struct BottomControlBar: View {
                 .overlay(Rectangle().strokeBorder(Color.red, lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .alert("End session?", isPresented: $endSessionAlertShown) {
+            Button("Cancel", role: .cancel) {}
+            if sessions.hasUnsavedChanges {
+                Button("Save & End") {
+                    endSessionSaveDraft = ""
+                    showSaveBeforeEndAlert = true
+                }
+                Button("End Without Saving", role: .destructive) { onEndSession() }
+            } else {
+                Button("End") { onEndSession() }
+            }
+        } message: {
+            Text(sessions.hasUnsavedChanges
+                 ? "You have unsaved changes. Save before ending?"
+                 : "Returns to the splash screen and stops cameras / MIDI / render.")
+        }
+        .alert("Save session before ending", isPresented: $showSaveBeforeEndAlert) {
+            TextField("Session name", text: $endSessionSaveDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save & End") {
+                let trimmed = endSessionSaveDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    _ = AppState.shared.saveCurrentSession(as: trimmed)
+                }
+                onEndSession()
+            }
+        }
     }
 
     /// Direct "save current state" button. Opens an alert with a
@@ -198,6 +191,18 @@ struct BottomControlBar: View {
                 .overlay(Rectangle().strokeBorder(Color.green, lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .alert("Save Session", isPresented: $saveAlertShown) {
+            TextField("Session name", text: $saveDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                let trimmed = saveDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    _ = AppState.shared.saveCurrentSession(as: trimmed)
+                }
+            }
+        } message: {
+            Text("Saves pads, sources, FX params, channel routing, NTSC settings — everything except play state and live LFO phase.")
+        }
     }
 
     /// Direct "load saved state" button. Opens a confirmation dialog
