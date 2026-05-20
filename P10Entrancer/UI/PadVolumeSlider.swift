@@ -10,7 +10,10 @@ import SwiftUI
 /// drags — keeps the layout consistent without giving the user a
 /// dead control.
 struct PadVolumeSlider: View {
-    let pad: PadSlot
+    /// @ObservedObject so this view re-renders when the pad's source
+    /// changes — otherwise `pad.audioPlayer` keeps pointing at the
+    /// previous source's silent player and the slider does nothing.
+    @ObservedObject var pad: PadSlot
 
     var body: some View {
         if let player = pad.audioPlayer {

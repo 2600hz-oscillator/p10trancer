@@ -17,7 +17,9 @@ import Combine
 /// player (image source / master-feedback / etc.) render an empty
 /// dimmed track that doesn't react.
 struct PadMiniVUMeter: View {
-    let pad: PadSlot
+    /// @ObservedObject so the meter re-renders + re-binds to the new
+    /// audioPlayer when the pad's source changes.
+    @ObservedObject var pad: PadSlot
 
     var body: some View {
         let isCamera = pad.source is CameraSource

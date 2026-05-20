@@ -17,7 +17,14 @@ enum PadFillMode: String, Codable {
 @MainActor
 final class PadSlot: ObservableObject {
     let index: Int
-    var source: PadSource?
+    /// Published so SwiftUI views that observe the PadSlot re-render
+    /// when the source kind changes — critical because `audioPlayer`
+    /// is a computed property reading off `source`. Without this, the
+    /// per-pad volume slider / mute icon / VU meter keep their
+    /// @ObservedObject binding to the OLD audioPlayer when the user
+    /// reassigns the pad (e.g. switching a video pad to an instrument),
+    /// so mute / volume / VU stop responding to the new sound.
+    @Published var source: PadSource?
     let fxChain: FXChain
     /// Aspect-handling mode used when this pad is routed to CH1/CH2.
     /// Defaults to letterbox so users never see distorted content

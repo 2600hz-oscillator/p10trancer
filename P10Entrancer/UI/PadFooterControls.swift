@@ -5,7 +5,10 @@ import SwiftUI
 /// and audio player (`isMuted`). Tap targets stop event propagation
 /// so they don't also trigger the pad's tap-to-route gesture.
 struct PadFooterControls: View {
-    let pad: PadSlot
+    /// @ObservedObject so the footer's mute icon + play button re-bind
+    /// when the pad's source changes (otherwise they keep pointing at
+    /// the previous source's audioPlayer / playback state).
+    @ObservedObject var pad: PadSlot
     let padIndex: Int
 
     @State private var lfoSheet = false
