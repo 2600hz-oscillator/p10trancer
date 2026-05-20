@@ -12,13 +12,12 @@ struct PadFooterControls: View {
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            // Top-right gear (waveform) — opens the per-pad LFO sheet.
-            // Instrument-pad settings (steps / keyboard / ADSR) live
-            // in their own gear icon in the upper-LEFT of the pad,
-            // wired from PadGridView.
+            // Top-LEFT waveform — opens the per-pad LFO sheet. Used
+            // to live in the top-right corner; moved to top-left to
+            // avoid collision with the PadFillModeToggle icon that
+            // now occupies the top-right.
             VStack {
                 HStack {
-                    Spacer()
                     Button { lfoSheet = true } label: {
                         Image(systemName: "waveform.path.ecg")
                             .font(.system(size: 12, weight: .bold))
@@ -29,7 +28,8 @@ struct PadFooterControls: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 6)
-                    .padding(.trailing, 6)
+                    .padding(.leading, 6)
+                    Spacer()
                 }
                 Spacer()
             }

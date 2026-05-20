@@ -103,11 +103,15 @@ struct PadGridView: View {
                     // is half-width and rendered as an OVERLAY on top
                     // of the video region, not a layout strip — so we
                     // don't have to reshape the Metal coordinate math.
-                    let miniVUW = max(8, stripW * 0.5)
+                    let miniVUW = max(8, stripW * 0.45)
                     HStack(spacing: 0) {
                         PadVolumeSlider(pad: pads.pads[index])
                             .frame(width: stripW)
-                        ZStack(alignment: .trailing) {
+                        // VU meter overlaid on the LEFT edge of the
+                        // video area, sitting flush against the
+                        // volume slider. Pairing them visually makes
+                        // the "set volume to match peaks" act obvious.
+                        ZStack(alignment: .leading) {
                             padCellOverlays(index: index,
                                              isCh1: isCh1,
                                              isCh2: isCh2,
