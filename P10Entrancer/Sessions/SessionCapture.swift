@@ -10,6 +10,7 @@ enum SessionCapture {
                          keyerSystem: KeyerSystem,
                          mixer: MixerState,
                          ntsc: NTSCState,
+                         hdPost: HDPostState,
                          cameras: CameraRegistry,
                          liveRecordings: LiveRecordingsStore) -> SessionSpec {
         var padSpecs: [SessionSpec.PadSpec] = []
@@ -52,6 +53,15 @@ enum SessionCapture {
             lumaPeaking: ntsc.lumaPeaking
         )
 
+        let hdPostSpec = SessionSpec.HDPostSpec(
+            gamma: hdPost.gamma,
+            contrast: hdPost.contrast,
+            saturation: hdPost.saturation,
+            brightness: hdPost.brightness,
+            bloom: hdPost.bloom,
+            bloomThresh: hdPost.bloomThresh
+        )
+
         let reel = liveRecordings.recent.map { $0.url.lastPathComponent }
 
         return SessionSpec(
@@ -60,6 +70,7 @@ enum SessionCapture {
             keyers: keyerSpecs,
             mixer: mixerSpec,
             ntsc: ntscSpec,
+            hdPost: hdPostSpec,
             liveRecordings: reel
         )
     }
@@ -102,6 +113,15 @@ enum SessionCapture {
         appState.ntscState.ycDelay = spec.ntsc.ycDelay
         appState.ntscState.combStrength = spec.ntsc.combStrength
         appState.ntscState.lumaPeaking = spec.ntsc.lumaPeaking
+        // HD post — optional for legacy sessions; leave at defaults if absent.
+        if let hd = spec.hdPost {
+            appState.hdPostState.gamma = hd.gamma
+            appState.hdPostState.contrast = hd.contrast
+            appState.hdPostState.saturation = hd.saturation
+            appState.hdPostState.brightness = hd.brightness
+            appState.hdPostState.bloom = hd.bloom
+            appState.hdPostState.bloomThresh = hd.bloomThresh
+        }
     }
 
     // MARK: - Pad encoding/decoding

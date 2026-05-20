@@ -19,6 +19,7 @@ enum PerformanceCapture {
             keyerSystem: appState.keyerSystem,
             mixer: appState.mixer,
             ntsc: appState.ntscState,
+            hdPost: appState.hdPostState,
             cameras: appState.cameras,
             liveRecordings: appState.liveRecordings
         )

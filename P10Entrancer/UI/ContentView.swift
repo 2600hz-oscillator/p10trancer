@@ -62,14 +62,23 @@ struct ContentView: View {
                 // either side of the centered 4:3 grid.
                 HStack(spacing: 0) {
                     if sideStripW > 40 {
-                        MacroSideStrip(
-                            macroSlotID: LFOTargets.slotID(forMacroIndex: 0),
-                            macroTitle: "MACRO 1",
-                            channelTitle: "CH1",
-                            channelAccent: .cyan,
-                            engine: appState.lfoEngine,
-                            transport: appState.transport
-                        )
+                        VStack(spacing: 4) {
+                            MacroSideStrip(
+                                macroSlotID: LFOTargets.slotID(forMacroIndex: 0),
+                                macroTitle: "MACRO 1",
+                                channelTitle: "CH1",
+                                channelAccent: .cyan,
+                                engine: appState.lfoEngine,
+                                transport: appState.transport
+                            )
+                            OutputFXSidePanel(
+                                mode: .hd,
+                                mixer: appState.mixer,
+                                hdPost: appState.hdPostState,
+                                ntsc: appState.ntscState
+                            )
+                            .frame(maxHeight: .infinity)
+                        }
                         .frame(width: sideStripW)
                     } else {
                         Spacer().frame(width: sideStripW)
@@ -93,14 +102,23 @@ struct ContentView: View {
                         .frame(width: gridW, height: outputRowH)
                     }
                     if sideStripW > 40 {
-                        MacroSideStrip(
-                            macroSlotID: LFOTargets.slotID(forMacroIndex: 1),
-                            macroTitle: "MACRO 2",
-                            channelTitle: "CH2",
-                            channelAccent: .orange,
-                            engine: appState.lfoEngine,
-                            transport: appState.transport
-                        )
+                        VStack(spacing: 4) {
+                            MacroSideStrip(
+                                macroSlotID: LFOTargets.slotID(forMacroIndex: 1),
+                                macroTitle: "MACRO 2",
+                                channelTitle: "CH2",
+                                channelAccent: .orange,
+                                engine: appState.lfoEngine,
+                                transport: appState.transport
+                            )
+                            OutputFXSidePanel(
+                                mode: .ntsc,
+                                mixer: appState.mixer,
+                                hdPost: appState.hdPostState,
+                                ntsc: appState.ntscState
+                            )
+                            .frame(maxHeight: .infinity)
+                        }
                         .frame(width: sideStripW)
                     } else {
                         Spacer().frame(width: sideStripW)

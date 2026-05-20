@@ -290,6 +290,28 @@ enum LFOTargets {
         ]
     }
 
+    /// HD output post-processing targets. Like the NTSC sliders, these
+    /// are global and intended for the macro LFOs.
+    static func forHDPost(_ state: HDPostState) -> [LFOTarget] {
+        return [
+            LFOTarget(id: "hd.gamma",
+                      displayName: "HD: Gamma", range: 0.5...2.5,
+                      getBase: { state.gamma }, setEffective: { state.gamma = $0 }),
+            LFOTarget(id: "hd.contrast",
+                      displayName: "HD: Contrast", range: 0.5...2.0,
+                      getBase: { state.contrast }, setEffective: { state.contrast = $0 }),
+            LFOTarget(id: "hd.saturation",
+                      displayName: "HD: Saturation", range: 0...2,
+                      getBase: { state.saturation }, setEffective: { state.saturation = $0 }),
+            LFOTarget(id: "hd.brightness",
+                      displayName: "HD: Brightness", range: -0.5...0.5,
+                      getBase: { state.brightness }, setEffective: { state.brightness = $0 }),
+            LFOTarget(id: "hd.bloom",
+                      displayName: "HD: Bloom", range: 0...1,
+                      getBase: { state.bloom }, setEffective: { state.bloom = $0 }),
+        ]
+    }
+
     /// Stable slot id used by LFOEngine to find/create the LFOState
     /// for each modulatable surface.
     static func slotID(forPadIndex i: Int) -> String { "pad-\(i)" }

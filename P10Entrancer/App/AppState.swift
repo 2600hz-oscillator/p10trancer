@@ -30,6 +30,8 @@ final class AppState: ObservableObject {
     let fxPadSystem = FXPadSystem()
     let ntscState = NTSCState()
     let ntscPipeline: NTSCPipeline
+    let hdPostState = HDPostState()
+    let hdPostPipeline: HDPostPipeline
     let masterMixerOffscreen: MasterMixerOffscreen
     let midiBindings: MIDIBindings
     let midiOutputBindings: MIDIOutputBindings
@@ -65,13 +67,15 @@ final class AppState: ObservableObject {
         self.feedbackRenderer = try! FeedbackRenderer(pads: pads, state: feedbackSystem.unit)
         self.xyzRenderer = try! XYZRenderer(state: xyzSystem.unit)
         self.ntscPipeline = try! NTSCPipeline(state: ntscState)
+        self.hdPostPipeline = try! HDPostPipeline(state: self.hdPostState)
         self.masterMixerOffscreen = try! MasterMixerOffscreen(
             pads: pads,
             mixer: mixer,
             keyer: self.keyerRenderer,
             feedback: self.feedbackRenderer,
             xyz: self.xyzRenderer,
-            ntscPipeline: self.ntscPipeline
+            ntscPipeline: self.ntscPipeline,
+            hdPostPipeline: self.hdPostPipeline
         )
 
         let recorder = MixerRecorder()
@@ -229,6 +233,12 @@ final class AppState: ObservableObject {
         ntscState.ycDelay = 0
         ntscState.combStrength = 0.7
         ntscState.lumaPeaking = 0
+        hdPostState.gamma = 1.0
+        hdPostState.contrast = 1.0
+        hdPostState.saturation = 1.0
+        hdPostState.brightness = 0
+        hdPostState.bloom = 0
+        hdPostState.bloomThresh = 0.75
         sessions.hasUnsavedChanges = false
         P10Logger.log("[AppState] reset to factory defaults")
     }
@@ -240,6 +250,7 @@ final class AppState: ObservableObject {
             keyerSystem: keyerSystem,
             mixer: mixer,
             ntsc: ntscState,
+            hdPost: hdPostState,
             cameras: cameras,
             liveRecordings: liveRecordings
         )
@@ -305,6 +316,7 @@ final class AppState: ObservableObject {
         // Global / macro-only: mixer position. Only macros see this
         // (LFOEngine.availableTargets(forSlot:) filters per slot).
         lfoEngine.registerTargets(LFOTargets.forMixer(mixer))
+        lfoEngine.registerTargets(LFOTargets.forHDPost(hdPostState))
 
         // FX slot LFO plumbing: the engine's slot resolver maps each
         // fxslot-N to the underlying FX unit's slot ID so the slot's

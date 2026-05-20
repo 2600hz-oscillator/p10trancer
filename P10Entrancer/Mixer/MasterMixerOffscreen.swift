@@ -12,6 +12,7 @@ final class MasterMixerOffscreen: FrameRenderer {
     let feedback: FeedbackRenderer
     let xyz: XYZRenderer
     private let ntscPipeline: NTSCPipeline
+    private let hdPostPipeline: HDPostPipeline
     private let pipeline: MTLRenderPipelineState
     weak var recorder: MixerRecorder?
 
@@ -23,13 +24,15 @@ final class MasterMixerOffscreen: FrameRenderer {
          keyer: KeyerRenderer,
          feedback: FeedbackRenderer,
          xyz: XYZRenderer,
-         ntscPipeline: NTSCPipeline) throws {
+         ntscPipeline: NTSCPipeline,
+         hdPostPipeline: HDPostPipeline) throws {
         self.pads = pads
         self.mixer = mixer
         self.keyer = keyer
         self.feedback = feedback
         self.xyz = xyz
         self.ntscPipeline = ntscPipeline
+        self.hdPostPipeline = hdPostPipeline
         self.pipeline = try context.makePipeline(
             vertex: "mixerVertex",
             fragment: "mixerFragment",
@@ -59,10 +62,12 @@ final class MasterMixerOffscreen: FrameRenderer {
     }
 
     var currentOutputTexture: MTLTexture? {
-        if mixer.outputMode == .ntsc4_3, let ntsc = ntscPipeline.outputTexture {
-            return ntsc
+        switch mixer.outputMode {
+        case .ntsc4_3:
+            return ntscPipeline.outputTexture ?? outputTexture
+        case .hd720p:
+            return hdPostPipeline.outputTexture ?? outputTexture
         }
-        return outputTexture
     }
 
     func render(frameIndex: UInt64, elapsedTime: CFTimeInterval) {
@@ -112,8 +117,11 @@ final class MasterMixerOffscreen: FrameRenderer {
         encoder.endEncoding()
         cmd.commit()
 
-        if mixer.outputMode == .ntsc4_3 {
+        switch mixer.outputMode {
+        case .ntsc4_3:
             ntscPipeline.render(input: target, elapsedTime: Float(elapsedTime))
+        case .hd720p:
+            hdPostPipeline.render(input: target)
         }
 
         if let recorder, recorder.isRecording, let captureTex = currentOutputTexture {

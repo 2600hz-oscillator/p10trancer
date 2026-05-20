@@ -12,6 +12,10 @@ struct SessionSpec: Codable {
     var keyers: [KeyerSpec]
     var mixer: MixerSpec
     var ntsc: NTSCSpec
+    /// Optional for forward-compat: older saved sessions (pre-2.1.0)
+    /// won't carry this field. When nil on load, HD post-processing
+    /// stays at neutral defaults.
+    var hdPost: HDPostSpec? = nil
     var liveRecordings: [String]   // basenames, relative to Documents/UserVideos/
 
     enum PadSourceKind: String, Codable {
@@ -65,6 +69,15 @@ struct SessionSpec: Codable {
         var position: Float
         var masterVolume: Float
         var outputMode: Int              // OutputMode.rawValue
+    }
+
+    struct HDPostSpec: Codable {
+        var gamma: Float
+        var contrast: Float
+        var saturation: Float
+        var brightness: Float
+        var bloom: Float
+        var bloomThresh: Float
     }
 
     struct NTSCSpec: Codable {
