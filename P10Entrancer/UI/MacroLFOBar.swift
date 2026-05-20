@@ -16,15 +16,15 @@ struct MacroSideStrip: View {
     let transport: Transport
 
     var body: some View {
-        VStack(spacing: 6) {
-            MacroLFOCard(slotID: macroSlotID,
-                         title: macroTitle,
-                         engine: engine,
-                         transport: transport)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 4)
+        // Sized to the macro card's content — no trailing Spacer.
+        // The OutputFXSidePanel that ContentView stacks below this
+        // claims the rest of the side-strip height.
+        MacroLFOCard(slotID: macroSlotID,
+                     title: macroTitle,
+                     engine: engine,
+                     transport: transport)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
     }
 }
 
