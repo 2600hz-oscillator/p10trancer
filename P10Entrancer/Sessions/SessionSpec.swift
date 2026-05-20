@@ -35,6 +35,10 @@ struct SessionSpec: Codable {
         var cameraID: String?            // matches CameraDevice.id
         var keyerIndex: Int?             // 0 or 1
         var fx: FXChainSpec
+        /// Aspect-handling for when this pad is routed to a channel.
+        /// Optional for back-compat with sessions saved before this
+        /// field existed — nil decodes to .letterbox.
+        var fillMode: PadFillMode? = nil
     }
 
     struct FXChainSpec: Codable {

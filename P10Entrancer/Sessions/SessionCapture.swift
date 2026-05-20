@@ -171,7 +171,8 @@ enum SessionCapture {
             userVideoBasename: userVideoBasename,
             cameraID: cameraID,
             keyerIndex: nil,
-            fx: fxSpec
+            fx: fxSpec,
+            fillMode: pad.fillMode
         )
     }
 
@@ -218,6 +219,8 @@ enum SessionCapture {
                 target.parameters[paramIndex].value = value
             }
         }
+        // Fill mode — defaults to letterbox if absent (legacy session).
+        appState.pads.pads[i].fillMode = spec.fillMode ?? .letterbox
     }
 
     private static func encodeChannel(_ source: ChannelSource) -> SessionSpec.MixerSpec.Source {

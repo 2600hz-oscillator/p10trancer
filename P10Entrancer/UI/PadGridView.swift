@@ -275,6 +275,12 @@ struct PadGridView: View {
                             Spacer()
                         }
                     }
+            // Top-right fill / letterbox toggle. Tap flips PadFillMode;
+            // master mixer's aspect transform picks it up.
+            PadFillModeToggle(pad: pads.pads[index])
+                .padding(.top, 6)
+                .padding(.trailing, 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             PadFooterControls(pad: pads.pads[index], padIndex: index)
             // Transcode-in-flight overlay. Lives at the TOP of the
             // ZStack so it eats taps to the underlying pad while

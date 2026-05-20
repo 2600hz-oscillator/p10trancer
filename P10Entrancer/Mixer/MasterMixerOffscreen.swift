@@ -98,6 +98,7 @@ final class MasterMixerOffscreen: FrameRenderer {
         let ch1Tex = textureForChannel(mixer.ch1Source) ?? blank
         let ch2Tex = textureForChannel(mixer.ch2Source) ?? blank
 
+        let canvasAspect = Float(canvasSize.width) / Float(max(canvasSize.height, 1))
         var params = MixerParamsBuffer(
             kind: Int32(mixer.transition.rawValue),
             position: mixer.position,
@@ -106,7 +107,11 @@ final class MasterMixerOffscreen: FrameRenderer {
             keyB: mixer.keyColor.z,
             keyThreshold: mixer.keyThreshold,
             keySoftness: mixer.keySoftness,
-            _pad: 0
+            canvasAspect: canvasAspect,
+            ch1FillMode: fillModeFor(mixer.ch1Source),
+            ch2FillMode: fillModeFor(mixer.ch2Source),
+            _pad0: 0,
+            _pad1: 0
         )
 
         encoder.setRenderPipelineState(pipeline)
@@ -126,6 +131,20 @@ final class MasterMixerOffscreen: FrameRenderer {
 
         if let recorder, recorder.isRecording, let captureTex = currentOutputTexture {
             recorder.captureFrame(from: captureTex, elapsedTime: elapsedTime)
+        }
+    }
+
+    /// Pick the fill mode that should apply when sampling this
+    /// channel's source. .pad reads the pad's own `fillMode`; FX
+    /// channel sources letterbox so the user always sees the FX's
+    /// full output rather than a cropped slice.
+    private func fillModeFor(_ source: ChannelSource) -> Int32 {
+        switch source {
+        case .pad(let i):
+            guard pads.pads.indices.contains(i) else { return 0 }
+            return pads.pads[i].fillMode == .fill ? 1 : 0
+        case .keyer, .feedback, .xyz:
+            return 0
         }
     }
 
@@ -164,5 +183,9 @@ private struct MixerParamsBuffer {
     var keyB: Float
     var keyThreshold: Float
     var keySoftness: Float
-    var _pad: Float
+    var canvasAspect: Float
+    var ch1FillMode: Int32
+    var ch2FillMode: Int32
+    var _pad0: Float
+    var _pad1: Float
 }
