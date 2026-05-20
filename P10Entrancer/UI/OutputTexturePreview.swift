@@ -49,8 +49,16 @@ struct OutputTexturePreview: UIViewRepresentable {
         func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
         func draw(in view: MTKView) {}
 
-        nonisolated func render(frameIndex: UInt64, elapsedTime: CFTimeInterval) {
-            Task { @MainActor in self.drawFrame() }
+        /// Throttle thumbnail previews to ~15 fps (every 4 ticks at
+        /// 60 fps). The async Task hop that used to be here drifted
+        /// the read across frame boundaries from the underlying FX
+        /// renderer's writes, causing visible jitter; the
+        /// synchronous direct-draw eliminates that drift, and lower
+        /// cadence keeps the GPU cost modest with N previews on
+        /// screen.
+        func render(frameIndex: UInt64, elapsedTime: CFTimeInterval) {
+            guard frameIndex % 4 == 0 else { return }
+            drawFrame()
         }
 
         private func drawFrame() {
