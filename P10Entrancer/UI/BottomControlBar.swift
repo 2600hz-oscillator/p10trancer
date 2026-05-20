@@ -13,7 +13,6 @@ struct BottomControlBar: View {
     @ObservedObject var sessions: SessionStore
     var onEndSession: () -> Void
 
-    @State private var showMixer = false
     @State private var showAutomation = false
     @State private var showKeyerControls = false
     @State private var showFeedbackControls = false
@@ -38,9 +37,6 @@ struct BottomControlBar: View {
             LiveRecordingsRowView(store: liveRecordings)
         }
         .background(.black)
-        .sheet(isPresented: $showMixer) {
-            MixerPanelView(pads: pads, mixer: mixer)
-        }
         .sheet(isPresented: $showAutomation) {
             AutomationPanelView(engine: automation, transport: AppState.shared.transport)
         }
@@ -113,11 +109,6 @@ struct BottomControlBar: View {
             verticalDivider
             faderBlock(label: "POSITION", value: $mixer.position, in: 0...1)
             verticalDivider
-            faderBlock(label: "MASTER VOL", value: Binding(
-                get: { mixer.masterVolume },
-                set: { v in mixer.masterVolume = v; AudioEngine.shared.masterVolume = v }
-            ), in: 0...1)
-            verticalDivider
             MasterTransportButton(transport: AppState.shared.transport)
             recordButton
         }
@@ -150,7 +141,6 @@ struct BottomControlBar: View {
             verticalDivider
             ntscBlock
             verticalDivider
-            mixerButton
             automationButton
             sessionButton
             saveSessionButton
@@ -350,17 +340,6 @@ struct BottomControlBar: View {
         }
     }
 
-
-    private var mixerButton: some View {
-        Button(action: { showMixer = true }) {
-            Text("MIXER…")
-                .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 12).padding(.vertical, 4)
-                .overlay(Rectangle().strokeBorder(Color.green, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
 
     private var automationButton: some View {
         Button(action: { showAutomation = true }) {

@@ -126,7 +126,6 @@ final class AppState: ObservableObject {
         started = true
         P10Logger.log("[AppState] startIfNeeded — Phase 10b")
         AudioEngine.shared.startIfNeeded()
-        AudioEngine.shared.masterVolume = mixer.masterVolume
         performances.bootstrapFactoryIfNeeded()
         // Pre-install both audio taps. The persistent recorder tap on
         // mainMixer means REC doesn't need a graph reconfigure. The mic
@@ -168,20 +167,12 @@ final class AppState: ObservableObject {
         applyDefaultPresetIfAny()
         RenderEngine.shared.start()
         screenshotCapturer.start()
-        wireMasterVolume()
         wireAudioRouting()
         registerLFOTargets()
-        // Always start silent. Without this, a saved session with a
-        // non-zero masterVolume would blast audio on launch — which is
-        // exactly the regression the user hit when wireMasterVolume
-        // started propagating session-loaded values into the engine.
-        // Run AFTER wireMasterVolume so the Combine sink also flips
-        // the engine to 0.
-        mixer.masterVolume = 0
-        AudioEngine.shared.masterVolume = 0
-        // Per-pad mute belt-and-braces: even with master volume at 0,
-        // pads start with their mute flag flipped so when the user
-        // raises master they don't blast everything at once.
+        // Launch-silent invariant: every pad starts muted so audio
+        // never blasts on a fresh launch (including session loads that
+        // had unmuted pads). The master mixer is now pinned at 1.0;
+        // per-pad mute is the only kill switch.
         muteAllPads()
     }
 
@@ -226,8 +217,7 @@ final class AppState: ObservableObject {
         mixer.activeChannel = .ch1
         mixer.transition = .crossfade
         mixer.position = 0
-        mixer.masterVolume = 0
-        AudioEngine.shared.masterVolume = 0
+        mixer.masterVolume = 0  // retained for back-compat; audio path ignores it
         mixer.outputMode = .hd720p
         ntscState.chromaBoost = 1.0
         ntscState.lumaNoise = 0
@@ -328,13 +318,6 @@ final class AppState: ObservableObject {
         // FX-type per slot is now immutable, so there's no kind-change
         // hook to install. Per-slot LFO assignment targets stay valid
         // for the lifetime of the app.
-    }
-
-    private func wireMasterVolume() {
-        mixer.$masterVolume
-            .receive(on: DispatchQueue.main)
-            .sink { v in AudioEngine.shared.masterVolume = v }
-            .store(in: &cancellables)
     }
 
     private func wireAudioRouting() {

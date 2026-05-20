@@ -81,10 +81,8 @@ final class MIDIOutputBindings {
             .removeDuplicates()
             .sink { [weak self] v in self?.sendCC(1, v) }
             .store(in: &cancellables)
-        mixer.$masterVolume
-            .removeDuplicates()
-            .sink { [weak self] v in self?.sendCC(2, v) }
-            .store(in: &cancellables)
+        // CC 2 (master volume) was removed when the master mixer UI
+        // was dropped. Per-pad volumes are the only volume knobs.
         mixer.$keyThreshold
             .removeDuplicates()
             .sink { [weak self] v in self?.sendCC(3, v) }

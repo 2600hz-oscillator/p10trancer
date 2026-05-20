@@ -29,10 +29,14 @@ final class MIDIOutputBindingsTests: XCTestCase {
         XCTAssertEqual(lastCC1[2], 89) // 0.7 * 127 ≈ 89
     }
 
-    func test_master_volume_change_emits_cc2() {
+    func test_master_volume_change_does_not_emit_cc2() {
+        // CC 2 (master volume) was removed when the master mixer UI
+        // was dropped. mixer.masterVolume still exists for session
+        // back-compat, but it must NOT emit MIDI.
         sink.events.removeAll()
         mixer.masterVolume = 1.0
-        XCTAssertTrue(sink.events.contains { $0 == [0xB0, 2, 127] })
+        XCTAssertFalse(sink.events.contains { $0[0] == 0xB0 && $0[1] == 2 },
+                       "CC 2 must no longer be emitted")
     }
 
     func test_ch1_pad_assignment_emits_pc() {

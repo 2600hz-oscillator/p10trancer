@@ -268,9 +268,14 @@ final class MIDIBindingsTests: XCTestCase {
         XCTAssertEqual(mixer.position, 64.0/127.0, accuracy: 0.001)
     }
 
-    func test_cc2_master_volume() {
+    func test_cc2_is_unbound_after_master_mixer_removal() {
+        // CC 2 used to drive master volume. The master mixer was
+        // removed; CC 2 is now unbound and a no-op. Verify mixer
+        // state doesn't move when CC 2 arrives.
+        let before = mixer.masterVolume
         bindings.handleCC(cc: 2, value: 96)
-        XCTAssertEqual(mixer.masterVolume, 96.0/127.0, accuracy: 0.001)
+        XCTAssertEqual(mixer.masterVolume, before, accuracy: 0.001,
+                       "CC 2 must be inert now")
     }
 
     func test_cc3_drives_only_master_chroma_threshold_not_keyers() {

@@ -196,9 +196,6 @@ final class MIDIBindings {
         switch cc {
         case 1:
             mixer.position = v
-        case 2:
-            mixer.masterVolume = v
-            AudioEngine.shared.masterVolume = v
         case 3:
             // Drives ONLY the master-mixer chroma-transition key.
             // Keyer 1/2 have their own threshold/softness sliders in

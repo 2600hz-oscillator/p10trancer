@@ -10,9 +10,14 @@ final class AudioEngine {
 
     private init() {}
 
+    /// Master volume is pinned to 1.0. Per-pad volume is the only
+    /// volume knob; mute (per pad) is the only kill switch. Setter is
+    /// a no-op retained for back-compat with code that still touches it
+    /// (sessions can carry an old masterVolume value but it has no audio
+    /// effect now).
     var masterVolume: Float {
-        get { engine.mainMixerNode.outputVolume }
-        set { engine.mainMixerNode.outputVolume = newValue }
+        get { 1.0 }
+        set { /* intentional no-op — see comment above */ }
     }
 
     func startIfNeeded() {
@@ -21,8 +26,7 @@ final class AudioEngine {
             let session = AVAudioSession.sharedInstance()
             // .playAndRecord with .defaultToSpeaker — verified by the
             // AudioSelfTest harness to produce audio at RMS 0.24 on the
-            // built-in speaker. Earlier "silent" reports were the
-            // master-volume propagation bug, not the category itself.
+            // built-in speaker.
             try session.setCategory(
                 .playAndRecord,
                 mode: .default,
@@ -32,11 +36,14 @@ final class AudioEngine {
         } catch {
             P10Logger.log("[AudioEngine] AVAudioSession config failed: \(error)")
         }
-        engine.mainMixerNode.outputVolume = 0.7
+        // Hard-pin main mixer to 1.0 — per-pad mixerNodes are the
+        // user-facing knobs. The launch-silent invariant is satisfied
+        // by AppState.muteAllPads() on launch / session load.
+        engine.mainMixerNode.outputVolume = 1.0
         do {
             try engine.start()
             started = true
-            P10Logger.log("[AudioEngine] running (.playAndRecord), masterVolume=0.7")
+            P10Logger.log("[AudioEngine] running (.playAndRecord), masterVolume pinned at 1.0")
             logSessionState(tag: "after engine start")
         } catch {
             P10Logger.log("[AudioEngine] engine start failed: \(error)")
