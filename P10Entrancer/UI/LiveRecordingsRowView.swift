@@ -71,6 +71,22 @@ struct LiveRecordingsRowView: View {
             .onTapGesture {
                 store.toggleSelection(rec.id)
             }
+            .contextMenu {
+                ShareLink(
+                    item: rec.url,
+                    preview: SharePreview(
+                        "p10trancer recording \(timeLabel(rec.createdAt))",
+                        image: rec.thumbnail.map { Image(uiImage: $0) } ?? Image(systemName: "video")
+                    )
+                ) {
+                    Label("Share…", systemImage: "square.and.arrow.up")
+                }
+                Button {
+                    UIPasteboard.general.url = rec.url
+                } label: {
+                    Label("Copy file path", systemImage: "doc.on.doc")
+                }
+            }
         } else {
             Color.white.opacity(0.04)
                 .frame(maxWidth: .infinity)

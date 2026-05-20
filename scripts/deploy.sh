@@ -56,7 +56,12 @@ if [[ "$skip_build" -eq 0 ]]; then
 fi
 
 if [[ "$skip_install" -eq 0 ]]; then
-  APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Debug-iphoneos/${SCHEME}.app" -type d 2>/dev/null | head -1)
+  # Exclude Index.noindex — Xcode's indexer builds a stub .app there
+  # without a final Info.plist; devicectl picks the wrong one if
+  # `find` happens to return it first.
+  APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Debug-iphoneos/${SCHEME}.app" -type d 2>/dev/null \
+    | grep -v Index.noindex \
+    | head -1)
   if [[ -z "$APP_PATH" ]]; then
     echo "Could not locate built .app in DerivedData"
     exit 1
