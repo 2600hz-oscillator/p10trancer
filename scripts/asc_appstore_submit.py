@@ -17,21 +17,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from asc_testflight import ASC, BUNDLE_ID  # noqa: E402
 
-VERSION_STRING = "2.0.0"
-BUILD_VERSION = "3"
+VERSION_STRING = "2.0.1"
+BUILD_VERSION = "1"
 PLATFORM = "IOS"
 WHATS_NEW = """\
-Major release — the AFX feature pack lands:
+Bug fixes and refinements:
 
-• WAVECEL wavetable instrument + ACIDKICK 4×16 drum sequencer as new pad sources.
-• In-app transcoding for .mkv / .webm / .avi imports via ffmpeg-kit, with a per-pad progress overlay.
-• Rebuilt chroma keyer using HSV hue distance + spill suppression + native iOS color wheel for picking the key.
-• Camera-into-CRT feedback model — additive blend with Reinhard tonemap, wider sweet spot, longer trails, brighter defaults.
-• Per-pad volume slider strip and always-on audio routing so the pad mix is the recording mix.
-• SAVE / LOAD session buttons; per-pad mute auto-engages on launch and on session load.
-• Three LFOs per instrument pad via segmented tab editor.
-• Thumbnail-quality knob (HIGH / MEDIUM / LOW) in the Inspector for older devices.
-• Master mixer transitions clamp cleanly to pure CH1 at the rails and pure CH2 at the rails.
+• Per-pad mute, volume, and VU now work on instrument pads (previously stuck even though audio was audible).
+• 'End Session?' alert no longer pops up on cold launch.
+• FX pad thumbnails (keyer / feedback) render smoothly — no more jitter or first-frame slash artifact on launch.
+
+New and improved:
+
+• X/Y joystick macro — a two-axis assignable control mapped to any pair of LFO targets.
+• Per-pad letterbox / fill toggle so each source fits the pad the way you want.
+• HD output post-processing with new side-strip FX panels.
+• Per-pad VU meter and volume slider; mini VU on camera and mic pads.
+• Per-pad gear menu + a global settings sheet (thumbnail quality, NTSC, MIDI).
+• In-app share for live clips; Documents / UserVideos exposed via the Files app.
 """
 
 
