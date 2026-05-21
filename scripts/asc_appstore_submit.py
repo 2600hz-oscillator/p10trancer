@@ -121,30 +121,53 @@ def set_whats_new(asc, version_id):
     )
 
 
-def submit_for_review(asc, version_id):
-    print(f"[asc] submitting appStoreVersion {version_id[:8]}… for review")
-    try:
-        asc.post(
-            "/appStoreVersionSubmissions",
-            json={
-                "data": {
-                    "type": "appStoreVersionSubmissions",
-                    "relationships": {
-                        "appStoreVersion": {
-                            "data": {"type": "appStoreVersions", "id": version_id}
-                        }
+def submit_for_review(asc, app_id, version_id):
+    # Modern API: create a reviewSubmission, attach the version as an
+    # item, then PATCH submitted=true. The older
+    # /appStoreVersionSubmissions endpoint now only allows DELETE.
+    print(f"[asc] creating reviewSubmission for appStoreVersion {version_id[:8]}…")
+    sub = asc.post(
+        "/reviewSubmissions",
+        json={
+            "data": {
+                "type": "reviewSubmissions",
+                "attributes": {"platform": "IOS"},
+                "relationships": {
+                    "app": {"data": {"type": "apps", "id": app_id}},
+                },
+            }
+        },
+    )["data"]
+    sid = sub["id"]
+    print(f"[asc] reviewSubmission id = {sid[:8]}…")
+    asc.post(
+        "/reviewSubmissionItems",
+        json={
+            "data": {
+                "type": "reviewSubmissionItems",
+                "relationships": {
+                    "reviewSubmission": {
+                        "data": {"type": "reviewSubmissions", "id": sid}
                     },
-                }
-            },
-        )
-        print("[asc] submitted for review.")
-    except Exception as e:
-        # Most common failure: missing screenshots / metadata. Surface
-        # the API error verbatim so the user knows what to fix.
-        print(f"[asc] submission failed: {e}")
-        print("[asc] check ASC web UI → Version 2.0.0 — likely missing screenshots")
-        print("[asc]   or other per-version metadata that doesn't auto-derive from 1.1.0.")
-        raise
+                    "appStoreVersion": {
+                        "data": {"type": "appStoreVersions", "id": version_id}
+                    },
+                },
+            }
+        },
+    )
+    asc.patch(
+        f"/reviewSubmissions/{sid}",
+        json={
+            "data": {
+                "type": "reviewSubmissions",
+                "id": sid,
+                "attributes": {"submitted": True},
+            }
+        },
+    )
+    state = asc.get(f"/reviewSubmissions/{sid}")["data"]["attributes"].get("state")
+    print(f"[asc] submitted for review. reviewSubmission state = {state}")
 
 
 def main():
@@ -160,7 +183,7 @@ def main():
 
     attach_build(asc, version_id, build["id"])
     set_whats_new(asc, version_id)
-    submit_for_review(asc, version_id)
+    submit_for_review(asc, app_id, version_id)
 
 
 if __name__ == "__main__":
