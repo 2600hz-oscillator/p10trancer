@@ -279,19 +279,25 @@ class ASC:
 
 
 WHAT_TO_TEST = """\
-v1.1.0 — first beta of the new layout.
+2.0.1 — bugfix round.
 
-Try:
-- 4×3 unified grid (9 source pads + 3 output pads: KEYER 1, KEYER 2, FEEDBACK)
-- Tap a pad to route to the active channel; long-press to load video, set camera, etc.
-- Output pads' gear icon (lower left) opens setup with a source picker —
-  KEYER 1 can use KEYER 2 / FEEDBACK as input, etc.
-- Per-pad play/stop + per-pad mute icons (lower right of each source pad)
-- Cameras as pads: turn up the per-camera volume in the mixer to record mic
-- Master mixer's chroma transition is now independent of the keyers
+What changed:
+- Per-pad mute, volume, and VU now work correctly on instrument pads (previously the slider/icon updates didn't take effect even though audio was audible).
+- 'End Session?' alert no longer pops up spuriously on cold launch.
+- FX pad thumbnails (keyer / feedback) render smoothly — no more jitter and no first-frame 'slash of content at the top' on launch.
+- X/Y joystick macro: assign two LFO targets to one pad.
+- Per-pad letterbox / fill toggle (top-right icon on each pad).
+- HD output post-processing + new side-strip output FX panels.
+- Per-pad VU + volume slider; mini VU on camera and mic pads.
+- In-app share for live clips; Documents/UserVideos visible in Files.
+
+Things to confirm:
+- Mute and volume control work on instrument pads (WAVECEL / ACIDKICK)
+- No false 'End Session?' prompt on app open
+- FX pad previews look smooth (no jitter / no startup artifact)
+- X/Y joystick smoothly cross-modulates two LFO targets
 
 Known issues:
-- Some screen real estate is wasted in portrait while we tune layout
 - Recording cuts video PTS at first frame (intentional) — the first ~16ms isn't visible
 """
 
@@ -310,7 +316,7 @@ def main():
     ap.add_argument("--contact-first", default="Tristan")
     ap.add_argument("--contact-last", default="Mayshark")
     ap.add_argument("--contact-email", default="tmayshark@gmail.com")
-    ap.add_argument("--contact-phone", default="+15555555555",
+    ap.add_argument("--contact-phone", default="+18024582526",
                     help="Phone for Beta App Review contact (override)")
     ap.add_argument("--skip-wait", action="store_true",
                     help="Skip waiting for processing")
