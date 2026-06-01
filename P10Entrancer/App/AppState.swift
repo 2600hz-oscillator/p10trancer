@@ -461,6 +461,15 @@ final class AppState: ObservableObject {
         P10Logger.log("[AppState] pad \(index + 1) source → Instrument (ACIDKICK)")
     }
 
+    /// Replace a pad's source with a fresh ACIDBASS TB-303 bassline. Each
+    /// pad gets its own voice + 16-step sequencer so patterns don't share
+    /// state across pads.
+    func setACIDBASSSource(at index: Int) {
+        let bass = ACIDBASSSource(transport: transport)
+        pads.setSource(bass, at: index)
+        P10Logger.log("[AppState] pad \(index + 1) source → Instrument (ACIDBASS)")
+    }
+
     /// Set pad `targetIndex`'s source to forward another pad's
     /// processed texture. Refuses self-references (pad N can't chain
     /// from pad N — that's an infinite read on the same property).

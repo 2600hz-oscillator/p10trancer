@@ -37,7 +37,7 @@ struct PadFooterControls: View {
                 Spacer()
             }
             .sheet(isPresented: $lfoSheet) {
-                if pad.source is InstrumentSource || pad.source is ACIDKICKSource {
+                if pad.source is InstrumentSource || pad.source is ACIDKICKSource || pad.source is ACIDBASSSource {
                     // Instrument-kind pads ship with three LFOs (the
                     // sheet handles tabs across them).
                     MultiLFOSheet(padIndex: padIndex,
@@ -100,6 +100,8 @@ struct PadFooterControls: View {
             InstrumentPlayStopIcon(instrument: inst, padIndex: padIndex)
         } else if let drums = pad.source as? ACIDKICKSource {
             ACIDKICKPlayStopIcon(source: drums, padIndex: padIndex)
+        } else if let bass = pad.source as? ACIDBASSSource {
+            ACIDBASSPlayStopIcon(source: bass, padIndex: padIndex)
         } else {
             Image(systemName: "play.fill")
                 .font(.system(size: 14, weight: .bold))
@@ -159,6 +161,28 @@ private struct ACIDKICKPlayStopIcon: View {
         Button {
             source.isPlaying.toggle()
             P10Logger.log("[PadFooter] pad \(padIndex + 1) ACIDKICK play=\(source.isPlaying)")
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(6)
+                .background(.black.opacity(0.55))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Play/stop the ACIDBASS 16-step bassline loop.
+private struct ACIDBASSPlayStopIcon: View {
+    @ObservedObject var source: ACIDBASSSource
+    let padIndex: Int
+
+    var body: some View {
+        let icon = source.isPlaying ? "pause.fill" : "play.fill"
+        Button {
+            source.isPlaying.toggle()
+            P10Logger.log("[PadFooter] pad \(padIndex + 1) ACIDBASS play=\(source.isPlaying)")
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .bold))

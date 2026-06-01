@@ -246,7 +246,7 @@ final class TB303Voice {
     var overdrive: Double = 0          // 0 ... 1 (post-filter soft clip)
     var glideTime: Double = 0.06       // seconds
 
-    private let sr: Double
+    private var sr: Double
     private var osc: PolyBlepOsc
     private var filter: TbVoxFilter
     private var decayEnv: TbVoxDecayEnv
@@ -260,7 +260,7 @@ final class TB303Voice {
     private var smTune: Double
     private var smWaveform: Double
     private var smOverdrive: Double
-    private let smoothCoeff: Double
+    private var smoothCoeff: Double
 
     // Note state.
     private var currentNoteCv: Double = 0
@@ -299,6 +299,20 @@ final class TB303Voice {
             ampEnv.trigger(accented ? 1.0 + accentAmount01 : 1.0)
             accentGain = accented ? accentAmount01 : 0
         }
+    }
+
+    /// Reconfigure for a new engine sample rate. Cheap no-op when unchanged;
+    /// rebuilds the SR-dependent primitives otherwise (called per render
+    /// block from the audio thread before any sample is produced).
+    func setSampleRate(_ newSampleRate: Double) {
+        guard newSampleRate > 0, abs(newSampleRate - sr) > 0.5 else { return }
+        sr = newSampleRate
+        smoothCoeff = exp(-2.0 * Double.pi * 80.0 / sr)
+        osc = PolyBlepOsc(sampleRate: sr)
+        filter = TbVoxFilter(sampleRate: sr)
+        decayEnv = TbVoxDecayEnv(sampleRate: sr, decayMs: smDecay)
+        ampEnv = TbVoxAmpEnv(sampleRate: sr, attackMs: 3, decayMs: 1230)
+        filter.setCutoffRes(smCutoff, smResonance)
     }
 
     /// 303s have no user gate-off; a rest just stops triggering. Provided for

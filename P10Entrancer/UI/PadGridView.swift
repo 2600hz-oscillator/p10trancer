@@ -14,6 +14,7 @@ struct PadGridView: View {
     /// pad-source changes without disappearing mid-edit.
     @State private var instrumentSheetPadIndex: Int? = nil
     @State private var acidkickSheetPadIndex: Int? = nil
+    @State private var acidbassSheetPadIndex: Int? = nil
     /// When non-nil, opens the per-pad FX settings sheet for that pad.
     /// Mirrors the instrument-sheet pattern so the sheet survives
     /// underlying source changes.
@@ -69,6 +70,14 @@ struct PadGridView: View {
         )) { target in
             if let drums = pads.pads[target.id].source as? ACIDKICKSource {
                 ACIDKICKSettingsSheet(source: drums)
+            }
+        }
+        .sheet(item: Binding(
+            get: { acidbassSheetPadIndex.map { InstrumentSheetTarget(id: $0) } },
+            set: { acidbassSheetPadIndex = $0?.id }
+        )) { target in
+            if let bass = pads.pads[target.id].source as? ACIDBASSSource {
+                ACIDBASSSettingsSheet(source: bass)
             }
         }
         // Per-pad FX settings sheet — opened from the long-press
@@ -207,6 +216,11 @@ struct PadGridView: View {
             Label("Instrument: ACIDKICK", systemImage: "metronome")
         }
         Button {
+            AppState.shared.setACIDBASSSource(at: index)
+        } label: {
+            Label("Instrument: ACIDBASS", systemImage: "waveform.path")
+        }
+        Button {
             AppState.shared.reloadVideoSource(at: index)
         } label: {
             Label("Reset to Bundled", systemImage: "arrow.counterclockwise")
@@ -261,6 +275,8 @@ struct PadGridView: View {
                             Button {
                                 if pads.pads[index].source is ACIDKICKSource {
                                     acidkickSheetPadIndex = index
+                                } else if pads.pads[index].source is ACIDBASSSource {
+                                    acidbassSheetPadIndex = index
                                 } else if pads.pads[index].source is InstrumentSource {
                                     instrumentSheetPadIndex = index
                                 } else {

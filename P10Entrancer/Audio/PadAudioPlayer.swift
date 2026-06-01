@@ -29,6 +29,8 @@ final class PadAudioPlayer: ObservableObject {
         case synth(WaveCelSynthRenderer)
         /// ACIDKICK drum-machine stereo renderer.
         case drumMachine(ACIDKICKRenderer)
+        /// ACIDBASS TB-303 stereo renderer.
+        case bassSynth(ACIDBASSRenderer)
     }
 
     private let engine: AVAudioEngine
@@ -90,6 +92,7 @@ final class PadAudioPlayer: ObservableObject {
         case .mic:         self.volume = 0
         case .synth:       self.volume = 0.7
         case .drumMachine: self.volume = 0.7
+        case .bassSynth:   self.volume = 0.7
         }
         switch source {
         case .file(let url):
@@ -99,6 +102,8 @@ final class PadAudioPlayer: ObservableObject {
         case .synth(let renderer):
             loadSynth(renderer: renderer)
         case .drumMachine(let renderer):
+            loadStereoRenderer(renderer)
+        case .bassSynth(let renderer):
             loadStereoRenderer(renderer)
         }
     }

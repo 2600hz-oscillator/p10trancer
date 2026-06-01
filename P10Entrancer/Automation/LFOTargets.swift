@@ -144,6 +144,76 @@ enum LFOTargets {
                           setEffective: { inst.vizColorCycle = $0 }),
             ]
         }
+        // ACIDBASS — the TB-303 voice + background live on this pad.
+        // Every continuous control is LFO-able (the voice knobs are
+        // Double, bridged to the Float LFO API).
+        if let bass = pad.source as? ACIDBASSSource {
+            let v = bass.voice
+            targets += [
+                LFOTarget(id: "pad.\(index).bass.tune",
+                          displayName: "PAD \(padNumber): BASS — Tune",
+                          range: -12...12,
+                          getBase: { Float(v.tuneSemitones) },
+                          setEffective: { v.tuneSemitones = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.cutoff",
+                          displayName: "PAD \(padNumber): BASS — Cutoff",
+                          range: 40...6000,
+                          getBase: { Float(v.cutoffHz) },
+                          setEffective: { v.cutoffHz = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.resonance",
+                          displayName: "PAD \(padNumber): BASS — Resonance",
+                          range: 0...1,
+                          getBase: { Float(v.resonance) },
+                          setEffective: { v.resonance = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.envmod",
+                          displayName: "PAD \(padNumber): BASS — Env Mod",
+                          range: 0...1,
+                          getBase: { Float(v.envAmount01) },
+                          setEffective: { v.envAmount01 = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.decay",
+                          displayName: "PAD \(padNumber): BASS — Decay",
+                          range: 50...3000,
+                          getBase: { Float(v.decayMs) },
+                          setEffective: { v.decayMs = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.accent",
+                          displayName: "PAD \(padNumber): BASS — Accent",
+                          range: 0...1,
+                          getBase: { Float(v.accentAmount01) },
+                          setEffective: { v.accentAmount01 = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.waveform",
+                          displayName: "PAD \(padNumber): BASS — Waveform",
+                          range: 0...1,
+                          getBase: { Float(v.waveform) },
+                          setEffective: { v.waveform = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.overdrive",
+                          displayName: "PAD \(padNumber): BASS — Overdrive",
+                          range: 0...1,
+                          getBase: { Float(v.overdrive) },
+                          setEffective: { v.overdrive = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.glide",
+                          displayName: "PAD \(padNumber): BASS — Glide",
+                          range: 0.005...0.2,
+                          getBase: { Float(v.glideTime) },
+                          setEffective: { v.glideTime = Double($0) }),
+            ]
+            targets += [
+                LFOTarget(id: "pad.\(index).bass.viz.warp",
+                          displayName: "PAD \(padNumber): BASS VIZ — Warp",
+                          range: 0...4,
+                          getBase: { Float(bass.vizWarpSpeed) },
+                          setEffective: { bass.vizWarpSpeed = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.viz.hue",
+                          displayName: "PAD \(padNumber): BASS VIZ — Hue",
+                          range: 0...1,
+                          getBase: { Float(bass.vizHueSpeed) },
+                          setEffective: { bass.vizHueSpeed = Double($0) }),
+                LFOTarget(id: "pad.\(index).bass.viz.zoom",
+                          displayName: "PAD \(padNumber): BASS VIZ — Zoom",
+                          range: 0.3...2.5,
+                          getBase: { Float(bass.vizZoom) },
+                          setEffective: { bass.vizZoom = Double($0) }),
+            ]
+        }
         return targets
     }
 
