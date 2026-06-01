@@ -8,7 +8,6 @@ struct ACIDBASSSettingsSheet: View {
     @ObservedObject var source: ACIDBASSSource
     @ObservedObject var sequencer: BassSequencer
     @Environment(\.dismiss) private var dismiss
-    @State private var voiceParamTick = UUID()
 
     init(source: ACIDBASSSource) {
         self.source = source
@@ -129,40 +128,16 @@ struct ACIDBASSSettingsSheet: View {
                 .font(.system(size: 10, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.7))
             Group {
-                knob("Tune", \.tuneSemitones, -12...12, "%.0f st")
-                knob("Cutoff", \.cutoffHz, 40...6000, "%.0f Hz")
-                knob("Resonance", \.resonance, 0...1, "%.2f")
-                knob("Env Mod", \.envAmount01, 0...1, "%.2f")
-                knob("Decay", \.decayMs, 50...3000, "%.0f ms")
-                knob("Accent", \.accentAmount01, 0...1, "%.2f")
-                knob("Waveform", \.waveform, 0...1, "%.2f")
-                knob("Overdrive", \.overdrive, 0...1, "%.2f")
-                knob("Glide", \.glideTime, 0.005...0.2, "%.3f s")
+                VoiceKnob(label: "Tune", voice: source.voice, keyPath: \.tuneSemitones, range: -12...12, format: "%.0f st")
+                VoiceKnob(label: "Cutoff", voice: source.voice, keyPath: \.cutoffHz, range: 40...6000, format: "%.0f Hz")
+                VoiceKnob(label: "Resonance", voice: source.voice, keyPath: \.resonance, range: 0...1, format: "%.2f")
+                VoiceKnob(label: "Env Mod", voice: source.voice, keyPath: \.envAmount01, range: 0...1, format: "%.2f")
+                VoiceKnob(label: "Decay", voice: source.voice, keyPath: \.decayMs, range: 50...3000, format: "%.0f ms")
+                VoiceKnob(label: "Accent", voice: source.voice, keyPath: \.accentAmount01, range: 0...1, format: "%.2f")
+                VoiceKnob(label: "Waveform", voice: source.voice, keyPath: \.waveform, range: 0...1, format: "%.2f")
+                VoiceKnob(label: "Overdrive", voice: source.voice, keyPath: \.overdrive, range: 0...1, format: "%.2f")
+                VoiceKnob(label: "Glide", voice: source.voice, keyPath: \.glideTime, range: 0.005...0.2, format: "%.3f s")
             }
-        }
-        .id(voiceParamTick)
-    }
-
-    private func knob(_ label: String,
-                      _ kp: ReferenceWritableKeyPath<TB303Voice, Double>,
-                      _ range: ClosedRange<Double>,
-                      _ fmt: String) -> some View {
-        let v = source.voice
-        let binding = Binding<Double>(
-            get: { v[keyPath: kp] },
-            set: { v[keyPath: kp] = $0; voiceParamTick = UUID() }
-        )
-        return VStack(alignment: .leading, spacing: 1) {
-            HStack {
-                Text(label)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
-                Spacer()
-                Text(String(format: fmt, binding.wrappedValue))
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            Slider(value: binding, in: range).tint(.orange)
         }
     }
 
@@ -197,5 +172,37 @@ struct ACIDBASSSettingsSheet: View {
     private func noteName(_ midi: Int) -> String {
         let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
         return names[((midi % 12) + 12) % 12] + "\(midi / 12 - 1)"
+    }
+}
+
+/// A slider for a non-observable TB303Voice Double knob. Mirrors the value
+/// in local @State so dragging stays smooth — writing straight to the voice
+/// and bumping a UUID `.id` mid-drag tore down and rebuilt the Slider every
+/// change, destroying the in-flight gesture (the reason the knobs couldn't
+/// be dragged). Changes are pushed to the voice via onChange.
+private struct VoiceKnob: View {
+    let label: String
+    let voice: TB303Voice
+    let keyPath: ReferenceWritableKeyPath<TB303Voice, Double>
+    let range: ClosedRange<Double>
+    let format: String
+    @State private var value: Double = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Text(String(format: format, value))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            Slider(value: $value, in: range)
+                .tint(.orange)
+                .onChange(of: value) { _, newValue in voice[keyPath: keyPath] = newValue }
+        }
+        .onAppear { value = voice[keyPath: keyPath] }
     }
 }
