@@ -52,6 +52,7 @@ final class PadSlot: ObservableObject {
         if let i = source as? InstrumentSource    { return i.audioPlayer }
         if let e = source as? ACIDKICKSource       { return e.audioPlayer }
         if let b = source as? ACIDBASSSource       { return b.audioPlayer }
+        if let m = source as? MultiplatesSource    { return m.audioPlayer }
         return nil
     }
 

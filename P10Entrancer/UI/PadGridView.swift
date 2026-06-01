@@ -15,6 +15,7 @@ struct PadGridView: View {
     @State private var instrumentSheetPadIndex: Int? = nil
     @State private var acidkickSheetPadIndex: Int? = nil
     @State private var acidbassSheetPadIndex: Int? = nil
+    @State private var multiplatesSheetPadIndex: Int? = nil
     /// When non-nil, opens the per-pad FX settings sheet for that pad.
     /// Mirrors the instrument-sheet pattern so the sheet survives
     /// underlying source changes.
@@ -78,6 +79,14 @@ struct PadGridView: View {
         )) { target in
             if let bass = pads.pads[target.id].source as? ACIDBASSSource {
                 ACIDBASSSettingsSheet(source: bass)
+            }
+        }
+        .sheet(item: Binding(
+            get: { multiplatesSheetPadIndex.map { InstrumentSheetTarget(id: $0) } },
+            set: { multiplatesSheetPadIndex = $0?.id }
+        )) { target in
+            if let multi = pads.pads[target.id].source as? MultiplatesSource {
+                MultiplatesSettingsSheet(source: multi)
             }
         }
         // Per-pad FX settings sheet — opened from the long-press
@@ -221,6 +230,11 @@ struct PadGridView: View {
             Label("Instrument: ACIDBASS", systemImage: "waveform.path")
         }
         Button {
+            AppState.shared.setMultiplatesSource(at: index)
+        } label: {
+            Label("Instrument: MULTIPLATES", systemImage: "square.stack.3d.up")
+        }
+        Button {
             AppState.shared.reloadVideoSource(at: index)
         } label: {
             Label("Reset to Bundled", systemImage: "arrow.counterclockwise")
@@ -277,6 +291,8 @@ struct PadGridView: View {
                                     acidkickSheetPadIndex = index
                                 } else if pads.pads[index].source is ACIDBASSSource {
                                     acidbassSheetPadIndex = index
+                                } else if pads.pads[index].source is MultiplatesSource {
+                                    multiplatesSheetPadIndex = index
                                 } else if pads.pads[index].source is InstrumentSource {
                                     instrumentSheetPadIndex = index
                                 } else {

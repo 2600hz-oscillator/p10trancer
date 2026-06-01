@@ -37,7 +37,7 @@ struct PadFooterControls: View {
                 Spacer()
             }
             .sheet(isPresented: $lfoSheet) {
-                if pad.source is InstrumentSource || pad.source is ACIDKICKSource || pad.source is ACIDBASSSource {
+                if pad.source is InstrumentSource || pad.source is ACIDKICKSource || pad.source is ACIDBASSSource || pad.source is MultiplatesSource {
                     // Instrument-kind pads ship with three LFOs (the
                     // sheet handles tabs across them).
                     MultiLFOSheet(padIndex: padIndex,
@@ -102,6 +102,8 @@ struct PadFooterControls: View {
             ACIDKICKPlayStopIcon(source: drums, padIndex: padIndex)
         } else if let bass = pad.source as? ACIDBASSSource {
             ACIDBASSPlayStopIcon(source: bass, padIndex: padIndex)
+        } else if let multi = pad.source as? MultiplatesSource {
+            MultiplatesPlayStopIcon(source: multi, padIndex: padIndex)
         } else {
             Image(systemName: "play.fill")
                 .font(.system(size: 14, weight: .bold))
@@ -183,6 +185,28 @@ private struct ACIDBASSPlayStopIcon: View {
         Button {
             source.isPlaying.toggle()
             P10Logger.log("[PadFooter] pad \(padIndex + 1) ACIDBASS play=\(source.isPlaying)")
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(6)
+                .background(.black.opacity(0.55))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Play/stop the MULTIPLATES 16-step loop.
+private struct MultiplatesPlayStopIcon: View {
+    @ObservedObject var source: MultiplatesSource
+    let padIndex: Int
+
+    var body: some View {
+        let icon = source.isPlaying ? "pause.fill" : "play.fill"
+        Button {
+            source.isPlaying.toggle()
+            P10Logger.log("[PadFooter] pad \(padIndex + 1) MULTIPLATES play=\(source.isPlaying)")
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .bold))

@@ -31,6 +31,8 @@ final class PadAudioPlayer: ObservableObject {
         case drumMachine(ACIDKICKRenderer)
         /// ACIDBASS TB-303 stereo renderer.
         case bassSynth(ACIDBASSRenderer)
+        /// MULTIPLATES macro-oscillator stereo renderer.
+        case macroSynth(MultiplatesRenderer)
     }
 
     private let engine: AVAudioEngine
@@ -93,6 +95,7 @@ final class PadAudioPlayer: ObservableObject {
         case .synth:       self.volume = 0.7
         case .drumMachine: self.volume = 0.7
         case .bassSynth:   self.volume = 0.7
+        case .macroSynth:  self.volume = 0.7
         }
         switch source {
         case .file(let url):
@@ -104,6 +107,8 @@ final class PadAudioPlayer: ObservableObject {
         case .drumMachine(let renderer):
             loadStereoRenderer(renderer)
         case .bassSynth(let renderer):
+            loadStereoRenderer(renderer)
+        case .macroSynth(let renderer):
             loadStereoRenderer(renderer)
         }
     }

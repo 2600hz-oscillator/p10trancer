@@ -470,6 +470,14 @@ final class AppState: ObservableObject {
         P10Logger.log("[AppState] pad \(index + 1) source → Instrument (ACIDBASS)")
     }
 
+    /// Replace a pad's source with a fresh MULTIPLATES macro-oscillator. Each
+    /// pad gets its own voice + 16-step sequencer.
+    func setMultiplatesSource(at index: Int) {
+        let multi = MultiplatesSource(transport: transport)
+        pads.setSource(multi, at: index)
+        P10Logger.log("[AppState] pad \(index + 1) source → Instrument (MULTIPLATES)")
+    }
+
     /// Set pad `targetIndex`'s source to forward another pad's
     /// processed texture. Refuses self-references (pad N can't chain
     /// from pad N — that's an infinite read on the same property).

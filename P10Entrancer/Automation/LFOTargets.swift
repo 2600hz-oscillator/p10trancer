@@ -214,6 +214,49 @@ enum LFOTargets {
                           setEffective: { bass.vizZoom = Double($0) }),
             ]
         }
+        // MULTIPLATES — global macros + background, all LFO-able.
+        if let multi = pad.source as? MultiplatesSource {
+            let v = multi.voice
+            targets += [
+                LFOTarget(id: "pad.\(index).multi.harmonics",
+                          displayName: "PAD \(padNumber): MULTI — Harmonics",
+                          range: 0...1,
+                          getBase: { Float(v.harmonics) },
+                          setEffective: { v.harmonics = Double($0) }),
+                LFOTarget(id: "pad.\(index).multi.timbre",
+                          displayName: "PAD \(padNumber): MULTI — Timbre",
+                          range: 0...1,
+                          getBase: { Float(v.timbre) },
+                          setEffective: { v.timbre = Double($0) }),
+                LFOTarget(id: "pad.\(index).multi.morph",
+                          displayName: "PAD \(padNumber): MULTI — Morph",
+                          range: 0...1,
+                          getBase: { Float(v.morph) },
+                          setEffective: { v.morph = Double($0) }),
+                LFOTarget(id: "pad.\(index).multi.level",
+                          displayName: "PAD \(padNumber): MULTI — Level",
+                          range: 0...1,
+                          getBase: { Float(v.level) },
+                          setEffective: { v.level = Double($0) }),
+            ]
+            targets += [
+                LFOTarget(id: "pad.\(index).multi.viz.warp",
+                          displayName: "PAD \(padNumber): MULTI VIZ — Warp",
+                          range: 0...4,
+                          getBase: { Float(multi.vizWarpSpeed) },
+                          setEffective: { multi.vizWarpSpeed = Double($0) }),
+                LFOTarget(id: "pad.\(index).multi.viz.hue",
+                          displayName: "PAD \(padNumber): MULTI VIZ — Hue",
+                          range: 0...1,
+                          getBase: { Float(multi.vizHueSpeed) },
+                          setEffective: { multi.vizHueSpeed = Double($0) }),
+                LFOTarget(id: "pad.\(index).multi.viz.zoom",
+                          displayName: "PAD \(padNumber): MULTI VIZ — Zoom",
+                          range: 0.3...2.5,
+                          getBase: { Float(multi.vizZoom) },
+                          setEffective: { multi.vizZoom = Double($0) }),
+            ]
+        }
         return targets
     }
 
