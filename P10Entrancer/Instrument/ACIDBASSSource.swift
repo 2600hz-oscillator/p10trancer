@@ -24,6 +24,9 @@ final class ACIDBASSSource: PadSource, ObservableObject {
     @Published var vizHueSpeed: Double = 0.2     // 0 ... 1
     @Published var vizZoom: Double = 1.0         // 0.3 ... 2.5 (ring density)
 
+    /// Keyboard octave for note entry (note = (octave+1)*12 + semitone).
+    @Published var octave: Int = 2
+
     let renderer: ACIDBASSRenderer
     let audioPlayer: PadAudioPlayer
 
@@ -100,6 +103,30 @@ final class ACIDBASSSource: PadSource, ObservableObject {
         // starve the main-thread clock.
         let stride = max(2, AppState.shared.thumbnailQuality.visualizerStride)
         if (frameCounter + vizPhase) % stride == 0 { renderAcidwarpBass() }
+    }
+
+    // MARK: - Note entry (shared keyboard)
+
+    /// Record a note into a step and enable it (keyboard with a cursor).
+    func assignNote(stepIndex: Int, semitoneFromC: Int) {
+        guard sequencer.steps.indices.contains(stepIndex) else { return }
+        sequencer.steps[stepIndex].note = (octave + 1) * 12 + semitoneFromC
+        sequencer.steps[stepIndex].enabled = true
+    }
+
+    func toggleStep(_ stepIndex: Int) {
+        guard sequencer.steps.indices.contains(stepIndex) else { return }
+        sequencer.steps[stepIndex].enabled.toggle()
+    }
+
+    /// Audition a live note (keyboard tapped with no step cursor).
+    func audition(semitoneFromC: Int) {
+        let midi = (octave + 1) * 12 + semitoneFromC
+        renderer.noteOn(noteCv: BassSequencer.noteCv(forNote: midi), accented: false, glide: false)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            renderer.noteOff()
+        }
     }
 
     // MARK: - Visualization

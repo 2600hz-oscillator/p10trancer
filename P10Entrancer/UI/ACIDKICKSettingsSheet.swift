@@ -46,9 +46,6 @@ struct ACIDKICKSettingsSheet: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    @State private var voiceParamTick = UUID()  // bumps when sliders move so the
-                                                  // non-@Published voice props re-read
-
     private func trackRow(_ trackIdx: Int) -> some View {
         let track = sequencer.tracks[trackIdx]
         return VStack(spacing: 4) {
@@ -63,7 +60,6 @@ struct ACIDKICKSettingsSheet: View {
             }
             .frame(height: 40)
             voiceControlsRow(trackIdx: trackIdx)
-                .id(voiceParamTick)
         }
     }
 
@@ -80,49 +76,11 @@ struct ACIDKICKSettingsSheet: View {
         return AnyView(
             HStack(spacing: 10) {
                 Spacer().frame(width: 90)  // align under the steps row
-                voiceParamSlider(label: "PITCH",
-                                 value: voiceBinding(\.pitchMul, voice: voice),
-                                 range: 0.25...4.0,
-                                 format: "%.2fx")
-                voiceParamSlider(label: "DECAY",
-                                 value: voiceBinding(\.decayMul, voice: voice),
-                                 range: 0.1...4.0,
-                                 format: "%.2fx")
-                voiceParamSlider(label: "CRUSH",
-                                 value: voiceBinding(\.bitcrush, voice: voice),
-                                 range: 0...1.0,
-                                 format: "%.2f")
+                DrumVoiceKnob(label: "PITCH", voice: voice, keyPath: \.pitchMul, range: 0.25...4.0, format: "%.2fx")
+                DrumVoiceKnob(label: "DECAY", voice: voice, keyPath: \.decayMul, range: 0.1...4.0, format: "%.2fx")
+                DrumVoiceKnob(label: "CRUSH", voice: voice, keyPath: \.bitcrush, range: 0...1.0, format: "%.2f")
             }
             .frame(height: 32)
-        )
-    }
-
-    private func voiceParamSlider(label: String,
-                                   value: Binding<Float>,
-                                   range: ClosedRange<Float>,
-                                   format: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            HStack {
-                Text(label)
-                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.65))
-                Spacer()
-                Text(String(format: format, value.wrappedValue))
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.55))
-            }
-            Slider(value: value, in: range).tint(.cyan)
-        }
-    }
-
-    private func voiceBinding(_ keyPath: ReferenceWritableKeyPath<DrumVoice, Float>,
-                              voice: DrumVoice) -> Binding<Float> {
-        Binding(
-            get: { voice[keyPath: keyPath] },
-            set: {
-                voice[keyPath: keyPath] = $0
-                voiceParamTick = UUID()
-            }
         )
     }
 
@@ -167,5 +125,36 @@ struct ACIDKICKSettingsSheet: View {
                 .overlay(Rectangle().strokeBorder(border, lineWidth: isCurrent ? 2 : 1))
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Slider for a non-observable DrumVoice Float param. Binds to local @State so
+/// the drag stays smooth — the previous voiceParamTick + .id(...) rebuilt the
+/// Slider mid-drag, making the knobs undraggable. Writes to the voice via
+/// onChange.
+private struct DrumVoiceKnob: View {
+    let label: String
+    let voice: DrumVoice
+    let keyPath: ReferenceWritableKeyPath<DrumVoice, Float>
+    let range: ClosedRange<Float>
+    let format: String
+    @State private var value: Float = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.65))
+                Spacer()
+                Text(String(format: format, value))
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.55))
+            }
+            Slider(value: $value, in: range)
+                .tint(.cyan)
+                .onChange(of: value) { _, newValue in voice[keyPath: keyPath] = newValue }
+        }
+        .onAppear { value = voice[keyPath: keyPath] }
     }
 }

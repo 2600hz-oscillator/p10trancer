@@ -66,7 +66,23 @@ struct InstrumentSettingsSheet: View {
                 VStack(alignment: .leading, spacing: 18) {
                     waveCelSection
                     stepGridSection
-                    keyboardSection
+                    StepKeyboardEntry(
+                        selectedStep: $selectedStep,
+                        octave: $instrument.octave,
+                        stepCount: StepSequencer.stepCount,
+                        assignNote: { step, semi in
+                            instrument.assignNote(stepIndex: step, semitoneFromC: semi)
+                        },
+                        audition: { semi in
+                            instrument.synth.frequencyHz = StepSequencer.frequencyHz(
+                                forNote: (instrument.octave + 1) * 12 + semi)
+                            instrument.adsr.setGate(true)
+                            Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 200_000_000)
+                                instrument.adsr.setGate(false)
+                            }
+                        }
+                    )
                     adsrSection
                     filterSection
                     reverbSection
@@ -245,114 +261,6 @@ struct InstrumentSettingsSheet: View {
         let octave = midi / 12 - 1
         let semi = midi % 12
         return "\(semitoneLabels[semi])\(octave)"
-    }
-
-    // MARK: - Keyboard
-
-    private var keyboardSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("KEYBOARD")
-                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
-                Spacer()
-                Text("OCTAVE")
-                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
-                Button {
-                    instrument.octave = max(0, instrument.octave - 1)
-                } label: {
-                    Image(systemName: "arrowtriangle.down.fill")
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6).padding(.vertical, 4)
-                        .background(Color.white.opacity(0.08))
-                        .overlay(Rectangle().strokeBorder(Color.white.opacity(0.3)))
-                }
-                .buttonStyle(.plain)
-                Text("\(instrument.octave)")
-                    .font(.system(size: 12, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(.white)
-                    .frame(width: 22)
-                Button {
-                    instrument.octave = min(8, instrument.octave + 1)
-                } label: {
-                    Image(systemName: "arrowtriangle.up.fill")
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6).padding(.vertical, 4)
-                        .background(Color.white.opacity(0.08))
-                        .overlay(Rectangle().strokeBorder(Color.white.opacity(0.3)))
-                }
-                .buttonStyle(.plain)
-            }
-            keyboard
-        }
-    }
-
-    private var keyboard: some View {
-        GeometryReader { geo in
-            let whiteIndices = [0, 2, 4, 5, 7, 9, 11]
-            let blackPositions: [(semi: Int, after: Int)] = [
-                (1, 0), (3, 1), (6, 3), (8, 4), (10, 5)
-            ]
-            let whiteCount = whiteIndices.count
-            let whiteW = geo.size.width / CGFloat(whiteCount)
-            let h = geo.size.height
-            let blackW = whiteW * 0.6
-            let blackH = h * 0.6
-            ZStack(alignment: .topLeading) {
-                HStack(spacing: 1) {
-                    ForEach(0..<whiteCount, id: \.self) { wi in
-                        let semi = whiteIndices[wi]
-                        keyButton(semi: semi, isBlack: false)
-                            .frame(width: whiteW - 1)
-                    }
-                }
-                .frame(height: h)
-                ForEach(0..<blackPositions.count, id: \.self) { bi in
-                    let pos = blackPositions[bi]
-                    keyButton(semi: pos.semi, isBlack: true)
-                        .frame(width: blackW, height: blackH)
-                        .position(x: CGFloat(pos.after + 1) * whiteW - blackW / 2 + blackW / 2,
-                                  y: blackH / 2)
-                        .offset(x: -blackW / 2)
-                }
-            }
-        }
-        .frame(height: 90)
-    }
-
-    private func keyButton(semi: Int, isBlack: Bool) -> some View {
-        let label = Self.semitoneLabels[semi]
-        return Button {
-            if let step = selectedStep {
-                // Sequence-record mode: assign + advance the cursor
-                // so the user can play a melody by tapping a step
-                // and then walking notes across the keyboard.
-                // Wraps at step 16 back to 0.
-                instrument.assignNote(stepIndex: step, semitoneFromC: semi)
-                selectedStep = (step + 1) % StepSequencer.stepCount
-            } else {
-                instrument.synth.frequencyHz = StepSequencer.frequencyHz(
-                    forNote: (instrument.octave + 1) * 12 + semi)
-                instrument.adsr.setGate(true)
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 200_000_000)
-                    instrument.adsr.setGate(false)
-                }
-            }
-        } label: {
-            VStack {
-                Spacer()
-                Text(label)
-                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(isBlack ? .white : .black)
-                    .padding(.bottom, 4)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(isBlack ? Color.black : Color.white)
-            .overlay(Rectangle().strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - ADSR

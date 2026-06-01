@@ -8,14 +8,12 @@ struct ACIDBASSSettingsSheet: View {
     @ObservedObject var source: ACIDBASSSource
     @ObservedObject var sequencer: BassSequencer
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedStep: Int? = nil
 
     init(source: ACIDBASSSource) {
         self.source = source
         self.sequencer = source.sequencer
     }
-
-    private let noteLo = 24   // C1
-    private let noteHi = 60   // C4
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +22,14 @@ struct ACIDBASSSettingsSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     sequencerSection
+                    StepKeyboardEntry(
+                        selectedStep: $selectedStep,
+                        octave: $source.octave,
+                        stepCount: BassSequencer.stepCount,
+                        octaveRange: 1...6,
+                        assignNote: { step, semi in source.assignNote(stepIndex: step, semitoneFromC: semi) },
+                        audition: { semi in source.audition(semitoneFromC: semi) }
+                    )
                     knobSection
                     vizSection
                 }
@@ -51,17 +57,17 @@ struct ACIDBASSSettingsSheet: View {
 
     private var sequencerSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("16-STEP SEQUENCER — gate / note / accent / slide")
+            Text("16-STEP SEQUENCER — tap GATE to cursor a step, then a key to set its note")
                 .font(.system(size: 10, weight: .heavy, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.7))
-            labeledRow("GATE") { gateCell($0) }
-            labeledRow("NOTE") { noteCell($0) }
+            labeledRow("GATE", height: 38) { gateCell($0) }
             labeledRow("ACC")  { flagCell($0, keyPath: \.accent, color: .orange) }
             labeledRow("SLD")  { flagCell($0, keyPath: \.slide, color: .cyan) }
         }
     }
 
     private func labeledRow<Cell: View>(_ label: String,
+                                        height: CGFloat = 30,
                                         @ViewBuilder cell: @escaping (Int) -> Cell) -> some View {
         HStack(spacing: 3) {
             Text(label)
@@ -70,39 +76,35 @@ struct ACIDBASSSettingsSheet: View {
                 .frame(width: 34, alignment: .leading)
             ForEach(0..<BassSequencer.stepCount, id: \.self) { i in cell(i) }
         }
-        .frame(height: 30)
+        .frame(height: height)
     }
 
     private func gateCell(_ i: Int) -> some View {
-        let on = sequencer.steps[i].enabled
+        let step = sequencer.steps[i]
         let isCurrent = sequencer.currentStep == i
-        let beat = i % 4 == 0
+        let isSelected = selectedStep == i
+        let bg: Color = step.enabled ? Color.green.opacity(isCurrent ? 0.9 : 0.55)
+                                     : Color.white.opacity(0.06)
+        let border: Color = isSelected ? .yellow : (isCurrent ? .white : .white.opacity(0.3))
         return Button {
-            sequencer.steps[i].enabled.toggle()
+            // First tap cursors the step (so the keyboard records into it);
+            // second tap on the cursored step toggles its gate.
+            if selectedStep == i { source.toggleStep(i); selectedStep = nil }
+            else { selectedStep = i }
         } label: {
-            Color.clear
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(on ? Color.green.opacity(isCurrent ? 0.9 : 0.55)
-                               : (beat ? Color.white.opacity(0.10) : Color.white.opacity(0.05)))
-                .overlay(Rectangle().strokeBorder(isCurrent ? .white : .white.opacity(0.3),
-                                                  lineWidth: isCurrent ? 2 : 1))
+            VStack(spacing: 1) {
+                Text("\(i + 1)")
+                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                Text(step.enabled ? noteName(step.note) : "—")
+                    .font(.system(size: 7, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(bg)
+            .overlay(Rectangle().strokeBorder(border, lineWidth: isSelected ? 2 : 1))
         }
         .buttonStyle(.plain)
-    }
-
-    private func noteCell(_ i: Int) -> some View {
-        Menu {
-            ForEach((noteLo...noteHi).reversed(), id: \.self) { n in
-                Button(noteName(n)) { sequencer.steps[i].note = n }
-            }
-        } label: {
-            Text(noteName(sequencer.steps[i].note))
-                .font(.system(size: 7, weight: .heavy, design: .monospaced))
-                .foregroundStyle(.white.opacity(sequencer.steps[i].enabled ? 1 : 0.4))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.white.opacity(0.06))
-                .overlay(Rectangle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
-        }
     }
 
     private func flagCell(_ i: Int,
