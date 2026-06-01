@@ -39,6 +39,9 @@ final class ACIDBASSSource: PadSource, ObservableObject {
     private let textureHeight = 180
     private var startTime: CFTimeInterval = CACurrentMediaTime()
     private var frameCounter = 0
+    /// Per-instance redraw phase so two instrument visualizers never
+    /// rasterize on the same frame (spreads the heavy main-thread work).
+    private let vizPhase = Int.random(in: 0..<8)
     /// Free-running transport tick count for beat-phase animation.
     private var tickCount: UInt64 = 0
     /// 303 slide model: a note glides IN when the PREVIOUS step had slide set.
@@ -75,13 +78,12 @@ final class ACIDBASSSource: PadSource, ObservableObject {
                 self.lastStepWasSlide = false
             }
         }
+        // Handle inline — see ACIDKICKSource for why the Task hop is gone.
         tickCancellable = transport.tickPublisher.sink { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.tickCount &+= 1
-                guard self.isPlaying else { return }
-                self.sequencer.handleTick()
-            }
+            guard let self else { return }
+            self.tickCount &+= 1
+            guard self.isPlaying else { return }
+            self.sequencer.handleTick()
         }
         runStateCancellable = transport.$isRunning.sink { [weak self] running in
             Task { @MainActor [weak self] in
@@ -93,8 +95,11 @@ final class ACIDBASSSource: PadSource, ObservableObject {
 
     func tick(timestamp: CFTimeInterval) {
         frameCounter &+= 1
-        let stride = AppState.shared.thumbnailQuality.visualizerStride
-        if frameCounter % stride == 0 { renderAcidwarpBass() }
+        // Floor the stride at 2 (<=30fps) and phase-offset per instance so
+        // multiple instrument visualizers don't stack on the same frame and
+        // starve the main-thread clock.
+        let stride = max(2, AppState.shared.thumbnailQuality.visualizerStride)
+        if (frameCounter + vizPhase) % stride == 0 { renderAcidwarpBass() }
     }
 
     // MARK: - Visualization

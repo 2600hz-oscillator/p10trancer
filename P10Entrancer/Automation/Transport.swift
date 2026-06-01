@@ -46,6 +46,10 @@ final class Transport: ObservableObject {
     let tickPublisher = PassthroughSubject<UInt64, Never>()
 
     private var internalTimer: DispatchSourceTimer?
+    /// Dedicated high-priority queue for the internal clock so its fires
+    /// are never delayed/coalesced behind main-thread UI + visualizer work.
+    private static let clockQueue = DispatchQueue(label: "com.p10entrancer.clock",
+                                                  qos: .userInteractive)
     private var lastExternalTickAt: CFTimeInterval = 0
     private var externalTickIntervals: [CFTimeInterval] = []
     private var externalClockTimeoutTimer: Timer?
@@ -153,15 +157,26 @@ final class Transport: ObservableObject {
 
     private func startInternalTimer() {
         internalTimer?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
+        // Run the timer on a dedicated high-priority queue (NOT main) so the
+        // kernel timer keeps firing on schedule no matter how busy the main
+        // thread is. Deliver each tick to the main actor (where subscribers
+        // live) via a separate main.async — unlike a main-queue
+        // DispatchSourceTimer, this does NOT coalesce missed fires, so a
+        // briefly-busy main thread makes ticks queue and catch up in order
+        // rather than collapsing into one (which used to slow the tempo).
+        let timer = DispatchSource.makeTimerSource(queue: Self.clockQueue)
         let interval = secondsPerTick()
         // 1ms leeway is what the kernel comfortably honors; tighter
         // doesn't actually improve precision on iOS but it adds CPU.
         timer.schedule(deadline: .now(), repeating: interval, leeway: .milliseconds(1))
         timer.setEventHandler { [weak self] in
-            guard let self else { return }
-            self.tickCount &+= 1
-            self.tickPublisher.send(self.tickCount)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    self.tickCount &+= 1
+                    self.tickPublisher.send(self.tickCount)
+                }
+            }
         }
         timer.resume()
         internalTimer = timer

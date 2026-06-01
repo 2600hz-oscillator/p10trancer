@@ -69,6 +69,9 @@ final class InstrumentSource: PadSource, ObservableObject {
     /// Throttle counter — rendering N polylines per frame is the
     /// expensive part of this visualizer, so we redraw at ~30 fps.
     private var frameCounter: Int = 0
+    /// Per-instance redraw phase so two instrument visualizers never
+    /// rasterize on the same frame (spreads the heavy main-thread work).
+    private let vizPhase = Int.random(in: 0..<8)
 
     init(transport: Transport, context: MetalContext = .shared) {
         self.context = context
@@ -109,12 +112,12 @@ final class InstrumentSource: PadSource, ObservableObject {
                 self.adsr.setGate(false)
             }
         }
+        // Handle inline — the publisher already delivers on the main actor;
+        // the old Task hop deferred the step a runloop turn and jittered
+        // tempo under load (matches the LFO subscriber's synchronous form).
         tickCancellable = transport.tickPublisher.sink { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard self.isPlaying else { return }
-                self.sequencer.handleTick()
-            }
+            guard let self, self.isPlaying else { return }
+            self.sequencer.handleTick()
         }
         runStateCancellable = transport.$isRunning.sink { [weak self] running in
             Task { @MainActor [weak self] in
@@ -137,8 +140,11 @@ final class InstrumentSource: PadSource, ObservableObject {
         // so the user can dial down the visualizer cost without
         // touching anything else.
         frameCounter &+= 1
-        let stride = AppState.shared.thumbnailQuality.visualizerStride
-        if frameCounter % stride == 0 { renderWavetableVisualization() }
+        // Floor the stride at 2 (<=30fps) and phase-offset per instance so
+        // multiple instrument visualizers don't stack on the same frame and
+        // starve the main-thread clock.
+        let stride = max(2, AppState.shared.thumbnailQuality.visualizerStride)
+        if (frameCounter + vizPhase) % stride == 0 { renderWavetableVisualization() }
     }
 
     func assignNote(stepIndex: Int, semitoneFromC: Int) {

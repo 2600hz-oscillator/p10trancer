@@ -52,6 +52,9 @@ final class ACIDKICKSource: PadSource, ObservableObject {
     /// shading was the biggest main-thread time sink and 30 fps is
     /// plenty for the chunky-pixel acidwarp aesthetic.
     private var frameCounter: Int = 0
+    /// Per-instance redraw phase so two instrument visualizers never
+    /// rasterize on the same frame (spreads the heavy main-thread work).
+    private let vizPhase = Int.random(in: 0..<8)
 
     init(transport: Transport, context: MetalContext = .shared) {
         self.context = context
@@ -86,11 +89,14 @@ final class ACIDKICKSource: PadSource, ObservableObject {
                 }
             }
         }
+        // Handle inline: the publisher already delivers on the main actor
+        // (the clock timer + the external-MIDI path both land on main), so
+        // the old Task{@MainActor} hop only deferred the step a runloop turn
+        // and let triggers pile up behind UI/visualizer work — audible as
+        // tempo jitter. The LFO subscriber uses this same synchronous form.
         tickCancellable = transport.tickPublisher.sink { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, self.isPlaying else { return }
-                self.sequencer.handleTick()
-            }
+            guard let self, self.isPlaying else { return }
+            self.sequencer.handleTick()
         }
         runStateCancellable = transport.$isRunning.sink { [weak self] running in
             Task { @MainActor [weak self] in
@@ -113,8 +119,11 @@ final class ACIDKICKSource: PadSource, ObservableObject {
         // ACIDKICK's per-cell sin/cos is the heaviest visualizer in
         // the app, so it benefits the most from a higher stride.
         frameCounter &+= 1
-        let stride = AppState.shared.thumbnailQuality.visualizerStride
-        if frameCounter % stride == 0 { renderAcidwarp() }
+        // Floor the stride at 2 (<=30fps) and phase-offset per instance so
+        // multiple instrument visualizers don't stack on the same frame and
+        // starve the main-thread clock.
+        let stride = max(2, AppState.shared.thumbnailQuality.visualizerStride)
+        if (frameCounter + vizPhase) % stride == 0 { renderAcidwarp() }
     }
 
     /// Re-create voice objects whose type changed so the new sound
