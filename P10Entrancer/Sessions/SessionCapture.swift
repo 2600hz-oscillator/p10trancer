@@ -38,7 +38,12 @@ enum SessionCapture {
             transition: mixer.transition.rawValue,
             position: mixer.position,
             masterVolume: mixer.masterVolume,
-            outputMode: mixer.outputMode.rawValue
+            // Legacy field kept in sync so older readers still get a sane
+            // value: 4:3 ⇒ 1 (was NTSC), 16:9 ⇒ 0 (was HD).
+            outputMode: mixer.outputGeometry == .ar4_3 ? 1 : 0,
+            outputGeometry: mixer.outputGeometry.rawValue,
+            resolution16_9: [mixer.resolution16_9.width, mixer.resolution16_9.height],
+            resolution4_3: [mixer.resolution4_3.width, mixer.resolution4_3.height]
         )
 
         let ntscSpec = SessionSpec.NTSCSpec(
@@ -51,7 +56,8 @@ enum SessionCapture {
             subcarrierDrift: ntsc.subcarrierDrift,
             ycDelay: ntsc.ycDelay,
             combStrength: ntsc.combStrength,
-            lumaPeaking: ntsc.lumaPeaking
+            lumaPeaking: ntsc.lumaPeaking,
+            enabled: ntsc.ntscEnabled
         )
 
         let hdPostSpec = SessionSpec.HDPostSpec(
@@ -110,7 +116,19 @@ enum SessionCapture {
         appState.mixer.transition = TransitionKind(rawValue: spec.mixer.transition) ?? .crossfade
         appState.mixer.position = spec.mixer.position
         appState.mixer.masterVolume = spec.mixer.masterVolume
-        appState.mixer.outputMode = OutputMode(rawValue: spec.mixer.outputMode) ?? .hd720p
+        // Output geometry + resolution. New fields win; legacy sessions
+        // (only outputMode) migrate: 0 ⇒ 16:9, 1 ⇒ 4:3.
+        if let g = spec.mixer.outputGeometry {
+            appState.mixer.outputGeometry = OutputGeometry(rawValue: g) ?? .ar16_9
+        } else {
+            appState.mixer.outputGeometry = spec.mixer.outputMode == 1 ? .ar4_3 : .ar16_9
+        }
+        if let r = spec.mixer.resolution16_9, r.count == 2 {
+            appState.mixer.resolution16_9 = OutputResolution(width: r[0], height: r[1])
+        }
+        if let r = spec.mixer.resolution4_3, r.count == 2 {
+            appState.mixer.resolution4_3 = OutputResolution(width: r[0], height: r[1])
+        }
         // NTSC
         appState.ntscState.chromaBoost = spec.ntsc.chromaBoost
         appState.ntscState.lumaNoise = spec.ntsc.lumaNoise
@@ -122,6 +140,8 @@ enum SessionCapture {
         appState.ntscState.ycDelay = spec.ntsc.ycDelay
         appState.ntscState.combStrength = spec.ntsc.combStrength
         appState.ntscState.lumaPeaking = spec.ntsc.lumaPeaking
+        // Analog pass enable — new field wins; legacy NTSC 4:3 mode ⇒ on.
+        appState.ntscState.ntscEnabled = spec.ntsc.enabled ?? (spec.mixer.outputMode == 1)
         // HD post — optional for legacy sessions; leave at defaults if absent.
         if let hd = spec.hdPost {
             appState.hdPostState.gamma = hd.gamma

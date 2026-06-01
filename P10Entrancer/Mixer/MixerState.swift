@@ -16,23 +16,57 @@ enum ChannelSource: Equatable {
     case xyz
 }
 
-enum OutputMode: Int, CaseIterable, Identifiable {
-    case hd720p = 0
-    case ntsc4_3 = 1
+/// Output aspect ratio. Decoupled from the FX/analog look — geometry only
+/// decides the canvas shape. The actual pixel size comes from the
+/// per-geometry `OutputResolution` the user picks.
+enum OutputGeometry: Int, CaseIterable, Identifiable {
+    case ar16_9 = 0
+    case ar4_3 = 1
 
     var id: Int { rawValue }
     var displayName: String {
         switch self {
-        case .hd720p: return "HD"
-        case .ntsc4_3: return "NTSC 4:3"
+        case .ar16_9: return "16:9"
+        case .ar4_3:  return "4:3"
         }
     }
-    var canvasSize: (width: Int, height: Int) {
+    /// Logical (square-pixel) aspect used for the composite canvasAspect.
+    var aspect: Float {
         switch self {
-        case .hd720p: return (1280, 720)
-        case .ntsc4_3: return (720, 480)
+        case .ar16_9: return 16.0 / 9.0
+        case .ar4_3:  return 4.0 / 3.0
         }
     }
+}
+
+/// A selectable output resolution. All offered sizes are square-pixel, so
+/// width/height matches the geometry's logical aspect exactly.
+struct OutputResolution: Equatable, Hashable, Identifiable {
+    let width: Int
+    let height: Int
+
+    var id: String { "\(width)x\(height)" }
+    var label: String { "\(width)×\(height)" }
+
+    static let options4_3: [OutputResolution] = [
+        .init(width: 320,  height: 240),
+        .init(width: 480,  height: 360),
+        .init(width: 640,  height: 480),
+        .init(width: 800,  height: 600),
+        .init(width: 960,  height: 720),
+        .init(width: 1024, height: 768),
+        .init(width: 1280, height: 960),
+        .init(width: 1440, height: 1080),
+    ]
+    static let options16_9: [OutputResolution] = [
+        .init(width: 426,  height: 240),
+        .init(width: 640,  height: 360),
+        .init(width: 854,  height: 480),
+        .init(width: 1280, height: 720),
+        .init(width: 1920, height: 1080),
+    ]
+    static let default4_3  = OutputResolution(width: 640,  height: 480)
+    static let default16_9 = OutputResolution(width: 1280, height: 720)
 }
 
 enum TransitionKind: Int, CaseIterable, Identifiable {
@@ -71,8 +105,25 @@ final class MixerState: ObservableObject {
     @Published var keyThreshold: Float = 0.35
     @Published var keySoftness: Float = 0.1
     @Published var inspectedPadIndex: Int = 0
-    @Published var outputMode: OutputMode = .hd720p
+    /// Output geometry (aspect) + per-geometry pixel resolution. Replaces
+    /// the old HD-vs-NTSC OutputMode: geometry is purely the canvas shape,
+    /// the analog "NTSC" look is now an independent FX toggle (NTSCState).
+    @Published var outputGeometry: OutputGeometry = .ar16_9
+    @Published var resolution16_9: OutputResolution = .default16_9
+    @Published var resolution4_3: OutputResolution = .default4_3
     @Published var masterVolume: Float = 0
+
+    /// The resolution active for the current geometry.
+    var resolution: OutputResolution {
+        outputGeometry == .ar4_3 ? resolution4_3 : resolution16_9
+    }
+    /// The output canvas pixel size — the single source of truth used by
+    /// the master mixer, the post pipelines, and the recorder.
+    var canvasSize: (width: Int, height: Int) {
+        (resolution.width, resolution.height)
+    }
+    /// Logical canvas aspect (square-pixel ⇒ equals the geometry aspect).
+    var canvasAspect: Float { outputGeometry.aspect }
 
     var ch1PadIndex: Int? {
         if case .pad(let i) = ch1Source { return i } else { return nil }

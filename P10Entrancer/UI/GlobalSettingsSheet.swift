@@ -9,6 +9,7 @@ import SwiftUI
 ///   3. MIDI — list of connected MIDI sources + live traffic log.
 struct GlobalSettingsSheet: View {
     @ObservedObject var appState: AppState
+    @ObservedObject var mixer: MixerState
     @ObservedObject var ntsc: NTSCState
     @ObservedObject var router: MIDIRouter
     @Environment(\.dismiss) private var dismiss
@@ -16,7 +17,7 @@ struct GlobalSettingsSheet: View {
 
     enum Section: String, CaseIterable, Identifiable {
         case performance = "PERFORMANCE"
-        case ntsc = "NTSC"
+        case output = "OUTPUT"
         case midi = "MIDI"
         var id: String { rawValue }
     }
@@ -31,7 +32,7 @@ struct GlobalSettingsSheet: View {
                 Group {
                     switch section {
                     case .performance: performanceSection
-                    case .ntsc: ntscSection
+                    case .output: outputSection
                     case .midi: midiSection
                     }
                 }
@@ -99,23 +100,49 @@ struct GlobalSettingsSheet: View {
         }
     }
 
-    // MARK: - NTSC
+    // MARK: - Output
 
-    private var ntscSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("NTSC FX")
-            slider("Chroma boost", $ntsc.chromaBoost, in: 0...3)
-            slider("Luma peak", $ntsc.lumaPeaking, in: 0...3)
-            slider("HSync wobble", $ntsc.hsyncWobble, in: 0...1)
-            slider("Burst phase", $ntsc.burstPhaseShift, in: -0.5...0.5)
-            slider("Subcarrier drift", $ntsc.subcarrierDrift, in: 0...0.5)
-            slider("Y/C delay", $ntsc.ycDelay, in: -8...8)
-            slider("Dropout", $ntsc.dropoutRate, in: 0...1)
-            slider("Luma noise", $ntsc.lumaNoise, in: 0...0.3)
-            slider("Chroma noise", $ntsc.chromaNoise, in: 0...0.3)
-            Text("Sliders affect output only when HDMI mode is NTSC 4:3.")
+    private var outputSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader("OUTPUT GEOMETRY")
+            HStack(spacing: 0) {
+                ForEach(OutputGeometry.allCases) { g in
+                    let selected = mixer.outputGeometry == g
+                    Button(action: { mixer.outputGeometry = g }) {
+                        Text(g.displayName)
+                            .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                            .frame(maxWidth: .infinity).frame(height: 34)
+                            .foregroundStyle(selected ? .black : .white)
+                            .background(selected ? Color.white : Color.white.opacity(0.06))
+                            .overlay(Rectangle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            sectionHeader("4:3 RESOLUTION")
+            resolutionGrid(OutputResolution.options4_3, selection: $mixer.resolution4_3)
+            sectionHeader("16:9 RESOLUTION")
+            resolutionGrid(OutputResolution.options16_9, selection: $mixer.resolution16_9)
+            Text("Output, pads, and live recordings render at the selected resolution. Higher = sharper but heavier on the GPU; all are offered. Analog/NTSC look is a separate toggle in the output-FX panel.")
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+
+    private func resolutionGrid(_ options: [OutputResolution], selection: Binding<OutputResolution>) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 6)], spacing: 6) {
+            ForEach(options) { r in
+                let selected = selection.wrappedValue == r
+                Button(action: { selection.wrappedValue = r }) {
+                    Text(r.label)
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .frame(maxWidth: .infinity).frame(height: 30)
+                        .foregroundStyle(selected ? .black : .white)
+                        .background(selected ? Color.white : Color.white.opacity(0.06))
+                        .overlay(Rectangle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 

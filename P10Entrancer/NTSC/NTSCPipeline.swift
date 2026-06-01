@@ -17,6 +17,11 @@ final class NTSCPipeline {
     private var lastInputSize: (Int, Int) = (0, 0)
     private let oversample = 2
 
+    /// Whether the analog pass should run this frame. Mirrors the user's
+    /// NTSCState toggle so the master mixer can skip the expensive
+    /// oversampled passes (and the inherent analog look) when off.
+    var isActive: Bool { state.ntscEnabled }
+
     init(state: NTSCState, context: MetalContext = .shared) throws {
         self.context = context
         self.state = state

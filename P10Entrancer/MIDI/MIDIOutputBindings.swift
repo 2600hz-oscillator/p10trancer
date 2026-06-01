@@ -148,17 +148,17 @@ final class MIDIOutputBindings {
                 self?.send([0xC0, UInt8(12 + kind.rawValue), 0])
             }
             .store(in: &cancellables)
-        mixer.$outputMode
+        mixer.$outputGeometry
             .removeDuplicates()
             .dropFirst()
-            .sink { [weak self] mode in
+            .sink { [weak self] geometry in
                 guard let self else { return }
                 // Emit BOTH the legacy toggle (PC 17) and the explicit
-                // setter (PC 60 = HD, PC 61 = NTSC). Legacy receivers
+                // setter (PC 60 = 16:9, PC 61 = 4:3). Legacy receivers
                 // that act on PC 17 keep working; stateless receivers
                 // (Electra One) act on the explicit PC and ignore 17.
                 self.send([0xC0, 17, 0])
-                self.send([0xC0, mode == .hd720p ? 60 : 61, 0])
+                self.send([0xC0, geometry == .ar16_9 ? 60 : 61, 0])
             }
             .store(in: &cancellables)
         mixer.$inspectedPadIndex
@@ -181,6 +181,15 @@ final class MIDIOutputBindings {
                 // outputMode above.
                 self.send([0xC0, 18, 0])
                 self.send([0xC0, isEnabled ? 62 : 63, 0])
+            }
+            .store(in: &cancellables)
+
+        ntsc.$ntscEnabled
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] on in
+                // Explicit setters: PC 64 = analog on, PC 65 = analog off.
+                self?.send([0xC0, on ? 64 : 65, 0])
             }
             .store(in: &cancellables)
 

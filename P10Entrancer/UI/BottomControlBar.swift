@@ -298,22 +298,22 @@ struct BottomControlBar: View {
 
     private var hdmiBlock: some View {
         HStack(spacing: 6) {
-            Text("HDMI")
+            Text("OUTPUT")
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.5))
                 .tracking(1.5)
-            outputModeButton(.hd720p, label: "HD")
-            outputModeButton(.ntsc4_3, label: "NTSC 4:3")
+            geometryButton(.ar16_9, label: "16:9")
+            geometryButton(.ar4_3, label: "4:3")
         }
     }
 
-    private func outputModeButton(_ mode: OutputMode, label: String) -> some View {
-        let isActive = mixer.outputMode == mode
-        return Button(action: { mixer.outputMode = mode }) {
+    private func geometryButton(_ geometry: OutputGeometry, label: String) -> some View {
+        let isActive = mixer.outputGeometry == geometry
+        return Button(action: { mixer.outputGeometry = geometry }) {
             Text(label)
                 .font(.system(size: 11, weight: .heavy, design: .monospaced))
                 .foregroundStyle(isActive ? .black : .white)
-                .frame(minWidth: 64)
+                .frame(minWidth: 52)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(isActive ? Color.green : Color.white.opacity(0.08))
@@ -346,10 +346,10 @@ struct BottomControlBar: View {
 
     private var ntscBlock: some View {
         HStack(spacing: 4) {
-            Circle().fill(mixer.outputMode == .ntsc4_3 ? Color.green : Color.white.opacity(0.3)).frame(width: 8, height: 8)
+            Circle().fill(ntsc.ntscEnabled ? Color.green : Color.white.opacity(0.3)).frame(width: 8, height: 8)
             Text("NTSC")
                 .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                .foregroundStyle(mixer.outputMode == .ntsc4_3 ? .white : .white.opacity(0.5))
+                .foregroundStyle(ntsc.ntscEnabled ? .white : .white.opacity(0.5))
         }
     }
 

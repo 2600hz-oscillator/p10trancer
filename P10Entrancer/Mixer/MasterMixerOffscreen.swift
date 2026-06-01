@@ -62,12 +62,12 @@ final class MasterMixerOffscreen: FrameRenderer {
     }
 
     var currentOutputTexture: MTLTexture? {
-        switch mixer.outputMode {
-        case .ntsc4_3:
-            return ntscPipeline.outputTexture ?? outputTexture
-        case .hd720p:
-            return hdPostPipeline.outputTexture ?? outputTexture
+        // Output FX chain: HD grade always runs (identity at its neutral
+        // defaults), then the NTSC analog pass only when enabled.
+        if ntscPipeline.isActive {
+            return ntscPipeline.outputTexture ?? hdPostPipeline.outputTexture ?? outputTexture
         }
+        return hdPostPipeline.outputTexture ?? outputTexture
     }
 
     func render(frameIndex: UInt64, elapsedTime: CFTimeInterval) {
@@ -79,7 +79,7 @@ final class MasterMixerOffscreen: FrameRenderer {
         keyer.render()
         xyz.render()
 
-        let canvasSize = mixer.outputMode.canvasSize
+        let canvasSize = mixer.canvasSize
         if (canvasSize.width, canvasSize.height) != lastSize {
             renderTexture = makeRenderTexture(width: canvasSize.width, height: canvasSize.height)
             lastSize = (canvasSize.width, canvasSize.height)
@@ -98,7 +98,7 @@ final class MasterMixerOffscreen: FrameRenderer {
         let ch1Tex = textureForChannel(mixer.ch1Source) ?? blank
         let ch2Tex = textureForChannel(mixer.ch2Source) ?? blank
 
-        let canvasAspect = Float(canvasSize.width) / Float(max(canvasSize.height, 1))
+        let canvasAspect = mixer.canvasAspect
         var params = MixerParamsBuffer(
             kind: Int32(mixer.transition.rawValue),
             position: mixer.position,
@@ -122,11 +122,13 @@ final class MasterMixerOffscreen: FrameRenderer {
         encoder.endEncoding()
         cmd.commit()
 
-        switch mixer.outputMode {
-        case .ntsc4_3:
-            ntscPipeline.render(input: target, elapsedTime: Float(elapsedTime))
-        case .hd720p:
-            hdPostPipeline.render(input: target)
+        // HD color-grade always runs (identity at neutral defaults), then
+        // the analog NTSC pass operates on the graded image only when the
+        // user has enabled it.
+        hdPostPipeline.render(input: target)
+        if ntscPipeline.isActive {
+            let graded = hdPostPipeline.outputTexture ?? target
+            ntscPipeline.render(input: graded, elapsedTime: Float(elapsedTime))
         }
 
         if let recorder, recorder.isRecording, let captureTex = currentOutputTexture {

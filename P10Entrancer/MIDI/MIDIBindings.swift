@@ -124,7 +124,7 @@ final class MIDIBindings {
                 mixer.transition = kind
             }
         case 17:
-            mixer.outputMode = (mixer.outputMode == .hd720p) ? .ntsc4_3 : .hd720p
+            mixer.outputGeometry = (mixer.outputGeometry == .ar16_9) ? .ar4_3 : .ar16_9
         case 18:
             keyer?.isEnabled.toggle()
         case 19:
@@ -155,13 +155,17 @@ final class MIDIBindings {
         // (Electra One) can send a single PC to drive the iPad to an
         // exact state, vs. toggling and having to track current state.
         case 60:
-            mixer.outputMode = .hd720p
+            mixer.outputGeometry = .ar16_9
         case 61:
-            mixer.outputMode = .ntsc4_3
+            mixer.outputGeometry = .ar4_3
         case 62:
             keyer?.isEnabled = true
         case 63:
             keyer?.isEnabled = false
+        case 64:
+            ntsc?.ntscEnabled = true
+        case 65:
+            ntsc?.ntscEnabled = false
         default:
             break
         }

@@ -75,7 +75,13 @@ struct SessionSpec: Codable {
         var transition: Int              // TransitionKind.rawValue
         var position: Float
         var masterVolume: Float
-        var outputMode: Int              // OutputMode.rawValue
+        var outputMode: Int              // legacy: 0 = HD/16:9, 1 = NTSC/4:3 (kept for migration)
+        /// Output geometry + per-geometry resolution. Optional for
+        /// back-compat: pre-2.1.0 sessions only carry `outputMode` and
+        /// are migrated on load.
+        var outputGeometry: Int? = nil   // 0 = 16:9, 1 = 4:3
+        var resolution16_9: [Int]? = nil // [width, height]
+        var resolution4_3: [Int]? = nil  // [width, height]
     }
 
     struct HDPostSpec: Codable {
@@ -105,5 +111,8 @@ struct SessionSpec: Codable {
         var ycDelay: Float
         var combStrength: Float
         var lumaPeaking: Float
+        /// Analog pass on/off. Optional for back-compat: nil ⇒ migrate
+        /// from the legacy outputMode (NTSC 4:3 mode ⇒ enabled).
+        var enabled: Bool? = nil
     }
 }

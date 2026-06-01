@@ -73,8 +73,7 @@ struct ContentView: View {
                                 transport: appState.transport
                             )
                             OutputFXSidePanel(
-                                mode: .hd,
-                                mixer: appState.mixer,
+                                mode: .grade,
                                 hdPost: appState.hdPostState,
                                 ntsc: appState.ntscState
                             )
@@ -113,8 +112,7 @@ struct ContentView: View {
                                 transport: appState.transport
                             )
                             OutputFXSidePanel(
-                                mode: .ntsc,
-                                mixer: appState.mixer,
+                                mode: .analog,
                                 hdPost: appState.hdPostState,
                                 ntsc: appState.ntscState
                             )
@@ -203,6 +201,7 @@ struct ContentView: View {
         .sheet(isPresented: $showGlobalSettings) {
             GlobalSettingsSheet(
                 appState: appState,
+                mixer: appState.mixer,
                 ntsc: appState.ntscState,
                 router: MIDIRouter.shared
             )

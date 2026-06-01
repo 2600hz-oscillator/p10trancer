@@ -3,8 +3,8 @@ import Metal
 
 /// Single-pass HD output post-processing. Applies HDPostState's
 /// gamma / contrast / saturation / brightness / bloom on top of the
-/// master mixer's output. Only active when outputMode == .hd720p;
-/// MasterMixerOffscreen.currentOutputTexture routes here.
+/// master mixer's output. Always runs in the output chain (identity at
+/// its neutral defaults); the analog NTSC pass runs after it when enabled.
 @MainActor
 final class HDPostPipeline {
     private(set) var outputTexture: MTLTexture?

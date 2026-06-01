@@ -128,7 +128,7 @@ final class AppState: ObservableObject {
         // the captured frame matches the output texture (fixes the "fills
         // ~1/4 of the screen" recording when output isn't 1280x720).
         self.recorder.canvasSizeProvider = { [weak self] in
-            self?.mixer.outputMode.canvasSize ?? (1280, 720)
+            self?.mixer.canvasSize ?? (1280, 720)
         }
 
         RenderEngine.shared.register(self.masterMixerOffscreen)
@@ -232,7 +232,10 @@ final class AppState: ObservableObject {
         mixer.transition = .crossfade
         mixer.position = 0
         mixer.masterVolume = 0  // retained for back-compat; audio path ignores it
-        mixer.outputMode = .hd720p
+        mixer.outputGeometry = .ar16_9
+        mixer.resolution16_9 = .default16_9
+        mixer.resolution4_3 = .default4_3
+        ntscState.ntscEnabled = false
         ntscState.chromaBoost = 1.0
         ntscState.lumaNoise = 0
         ntscState.chromaNoise = 0
