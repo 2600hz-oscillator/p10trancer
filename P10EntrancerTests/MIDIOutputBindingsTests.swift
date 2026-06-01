@@ -132,17 +132,17 @@ final class MIDIOutputBindingsTests: XCTestCase {
         XCTAssertTrue(sink.events.isEmpty, "muted flag should suppress all output")
     }
 
-    func test_outputmode_change_emits_pc17_and_explicit() {
+    func test_geometry_change_emits_pc17_and_explicit() {
         sink.events.removeAll()
-        mixer.outputMode = .ntsc4_3
+        mixer.outputGeometry = .ar4_3
         XCTAssertTrue(sink.events.contains { $0 == [0xC0, 17, 0] },
                       "Legacy toggle PC 17 must still emit")
         XCTAssertTrue(sink.events.contains { $0 == [0xC0, 61, 0] },
-                      "Explicit PC 61 (NTSC) must emit for stateless receivers")
+                      "Explicit PC 61 (4:3) must emit for stateless receivers")
         sink.events.removeAll()
-        mixer.outputMode = .hd720p
+        mixer.outputGeometry = .ar16_9
         XCTAssertTrue(sink.events.contains { $0 == [0xC0, 60, 0] },
-                      "Explicit PC 60 (HD) must emit when switching back")
+                      "Explicit PC 60 (16:9) must emit when switching back")
     }
 
     func test_keyer_isEnabled_change_emits_pc18_and_explicit() {

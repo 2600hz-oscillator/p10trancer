@@ -102,31 +102,44 @@ final class MixerStateTests: XCTestCase {
         XCTAssertEqual(m.activeChannel, .ch2)
     }
 
-    func test_outputMode_default_and_assignment() {
+    func test_outputGeometry_default_and_assignment() {
         let m = MixerState()
-        XCTAssertEqual(m.outputMode, .hd720p, "default output mode is HD")
-        m.outputMode = .ntsc4_3
-        XCTAssertEqual(m.outputMode, .ntsc4_3, "assigning .ntsc4_3 must take effect")
-        m.outputMode = .hd720p
-        XCTAssertEqual(m.outputMode, .hd720p, "assigning back to .hd720p must take effect")
+        XCTAssertEqual(m.outputGeometry, .ar16_9, "default output geometry is 16:9")
+        m.outputGeometry = .ar4_3
+        XCTAssertEqual(m.outputGeometry, .ar4_3, "assigning .ar4_3 must take effect")
+        m.outputGeometry = .ar16_9
+        XCTAssertEqual(m.outputGeometry, .ar16_9, "assigning back to .ar16_9 must take effect")
     }
 
-    func test_outputMode_canvasSize() {
-        XCTAssertEqual(OutputMode.hd720p.canvasSize.width, 1280)
-        XCTAssertEqual(OutputMode.hd720p.canvasSize.height, 720)
-        XCTAssertEqual(OutputMode.ntsc4_3.canvasSize.width, 720)
-        XCTAssertEqual(OutputMode.ntsc4_3.canvasSize.height, 480)
+    func test_canvasSize_follows_geometry_and_resolution() {
+        let m = MixerState()
+        // Defaults: 16:9 @ 1280x720, 4:3 @ 640x480.
+        m.outputGeometry = .ar16_9
+        XCTAssertEqual(m.canvasSize.width, 1280)
+        XCTAssertEqual(m.canvasSize.height, 720)
+        m.outputGeometry = .ar4_3
+        XCTAssertEqual(m.canvasSize.width, 640)
+        XCTAssertEqual(m.canvasSize.height, 480)
+        // Picking a different per-geometry resolution flows through canvasSize.
+        m.resolution4_3 = OutputResolution(width: 1440, height: 1080)
+        XCTAssertEqual(m.canvasSize.width, 1440)
+        XCTAssertEqual(m.canvasSize.height, 1080)
     }
 
-    func test_outputMode_publishes_changes() {
+    func test_geometry_aspect_values() {
+        XCTAssertEqual(OutputGeometry.ar16_9.aspect, 16.0 / 9.0, accuracy: 1e-6)
+        XCTAssertEqual(OutputGeometry.ar4_3.aspect, 4.0 / 3.0, accuracy: 1e-6)
+    }
+
+    func test_outputGeometry_publishes_changes() {
         let m = MixerState()
-        var observed: [OutputMode] = []
-        let cancellable = m.$outputMode.sink { observed.append($0) }
-        m.outputMode = .ntsc4_3
-        m.outputMode = .hd720p
-        m.outputMode = .ntsc4_3
+        var observed: [OutputGeometry] = []
+        let cancellable = m.$outputGeometry.sink { observed.append($0) }
+        m.outputGeometry = .ar4_3
+        m.outputGeometry = .ar16_9
+        m.outputGeometry = .ar4_3
         cancellable.cancel()
-        XCTAssertEqual(observed, [.hd720p, .ntsc4_3, .hd720p, .ntsc4_3],
+        XCTAssertEqual(observed, [.ar16_9, .ar4_3, .ar16_9, .ar4_3],
                        "Publisher must emit initial + every assignment so SwiftUI views update")
     }
 }

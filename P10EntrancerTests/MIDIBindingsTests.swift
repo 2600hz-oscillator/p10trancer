@@ -83,12 +83,12 @@ final class MIDIBindingsTests: XCTestCase {
         }
     }
 
-    func test_pc_17_toggles_output_mode() {
-        XCTAssertEqual(mixer.outputMode, .hd720p)
+    func test_pc_17_toggles_output_geometry() {
+        XCTAssertEqual(mixer.outputGeometry, .ar16_9)
         bindings.handleProgramChange(17)
-        XCTAssertEqual(mixer.outputMode, .ntsc4_3)
+        XCTAssertEqual(mixer.outputGeometry, .ar4_3)
         bindings.handleProgramChange(17)
-        XCTAssertEqual(mixer.outputMode, .hd720p)
+        XCTAssertEqual(mixer.outputGeometry, .ar16_9)
     }
 
     func test_pc_18_toggles_keyer_enable() {
@@ -113,23 +113,23 @@ final class MIDIBindingsTests: XCTestCase {
 
     // MARK: - Explicit binary mode setters (Electra-friendly)
 
-    func test_pc_60_sets_output_mode_to_hd() {
-        mixer.outputMode = .ntsc4_3
+    func test_pc_60_sets_geometry_to_16_9() {
+        mixer.outputGeometry = .ar4_3
         bindings.handleProgramChange(60)
-        XCTAssertEqual(mixer.outputMode, .hd720p)
+        XCTAssertEqual(mixer.outputGeometry, .ar16_9)
     }
 
-    func test_pc_61_sets_output_mode_to_ntsc() {
-        mixer.outputMode = .hd720p
+    func test_pc_61_sets_geometry_to_4_3() {
+        mixer.outputGeometry = .ar16_9
         bindings.handleProgramChange(61)
-        XCTAssertEqual(mixer.outputMode, .ntsc4_3)
+        XCTAssertEqual(mixer.outputGeometry, .ar4_3)
     }
 
     func test_pc_60_is_idempotent_unlike_toggle() {
-        mixer.outputMode = .hd720p
+        mixer.outputGeometry = .ar16_9
         bindings.handleProgramChange(60)
         bindings.handleProgramChange(60)
-        XCTAssertEqual(mixer.outputMode, .hd720p, "PC 60 must always set HD, never flip away")
+        XCTAssertEqual(mixer.outputGeometry, .ar16_9, "PC 60 must always set 16:9, never flip away")
     }
 
     func test_pc_62_enables_keyer() {
