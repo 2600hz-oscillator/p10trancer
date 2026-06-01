@@ -21,16 +21,41 @@ struct InstrumentSettingsSheet: View {
 
     private static let semitoneLabels = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
-    /// Names of WAVs bundled under Resources/Wavetables.
+    /// Names of WAVs bundled under Resources/Wavetables. The 46 presets are
+    /// the WAVECEL/WAVESCULPT preset bank (E352 format, parsed verbatim);
+    /// resource == the uppercase filename stem.
     private static let bundledTables: [(label: String, resource: String)] = [
-        ("VOXSYNTH", "VOXSYNTH"),
+        ("DEFAULT (synth)", ""),  // empty = use the synthesized default
         ("ACID_RIN", "ACID_RIN"),
-        ("DEFAULT (synth)", "")  // empty = use the synthesized default
+        ("ZAP", "ZAP"), ("WINDOW_S", "WINDOW_S"), ("WAVETRIP", "WAVETRIP"),
+        ("VPS", "VPS"), ("VOXSYNTH", "VOXSYNTH"), ("VOICE_DR", "VOICE_DR"),
+        ("VOICE_A", "VOICE_A"), ("VOCAL_FO", "VOCAL_FO"), ("VIRUS_SA", "VIRUS_SA"),
+        ("VINCENT_", "VINCENT_"), ("TIDYB072", "TIDYB072"), ("TIDYB021", "TIDYB021"),
+        ("TIDAL", "TIDAL"), ("TALKING", "TALKING"), ("TABLE_TI", "TABLE_TI"),
+        ("SYNTH_VO", "SYNTH_VO"), ("SYNLPG08", "SYNLPG08"), ("SYNLP81", "SYNLP81"),
+        ("SYNLP18", "SYNLP18"), ("SYNLP154", "SYNLP154"), ("SPECTRAL", "SPECTRAL"),
+        ("SOHLER79", "SOHLER79"), ("SAND_EYE", "SAND_EYE"), ("RRLYRQ7", "RRLYRQ7"),
+        ("RRLYRQ6", "RRLYRQ6"), ("ROFL", "ROFL"), ("RETRO_SP", "RETRO_SP"),
+        ("RESO_SQU", "RESO_SQU"), ("RESO_P00", "RESO_P00"), ("RANDOM_N", "RANDOM_N"),
+        ("QUX_FMY", "QUX_FMY"), ("QUACK", "QUACK"), ("PROPHET_", "PROPHET_"),
+        ("PISTON_H", "PISTON_H"), ("OSMAOS", "OSMAOS"), ("ORGAN_DI", "ORGAN_DI"),
+        ("MORPHING", "MORPHING"), ("LSDJ_WAV", "LSDJ_WAV"), ("LOM_A", "LOM_A"),
+        ("LOFIRISE", "LOFIRISE"), ("LIGHT_YE", "LIGHT_YE"), ("KERMITEN", "KERMITEN"),
+        ("KEEN", "KEEN"), ("I_HEART_", "I_HEART_"), ("ISOLDE", "ISOLDE"),
+        ("ISOBELLE", "ISOBELLE"),
     ]
 
     init(instrument: InstrumentSource) {
         self.instrument = instrument
         self.sequencer = instrument.sequencer
+    }
+
+    private func loadBundledTable(_ entry: (label: String, resource: String)) {
+        if entry.resource.isEmpty {
+            instrument.loadTable(WaveCelSynth.defaultTable())
+        } else if let t = WaveCelTableLoader.loadBundled(entry.resource) {
+            instrument.loadTable(t)
+        }
     }
 
     var body: some View {
@@ -95,20 +120,24 @@ struct InstrumentSettingsSheet: View {
                     .overlay(Rectangle().strokeBorder(.white.opacity(0.3), lineWidth: 1))
             }
             HStack(spacing: 8) {
-                ForEach(Self.bundledTables, id: \.label) { entry in
-                    Button(entry.label) {
-                        if entry.resource.isEmpty {
-                            instrument.loadTable(WaveCelSynth.defaultTable())
-                        } else if let t = WaveCelTableLoader.loadBundled(entry.resource) {
-                            instrument.loadTable(t)
-                        }
+                Menu {
+                    ForEach(Self.bundledTables, id: \.label) { entry in
+                        Button(entry.label) { loadBundledTable(entry) }
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.orange)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("PRESET")
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                    }
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .overlay(Rectangle().strokeBorder(Color.orange, lineWidth: 1))
                 }
+                .tint(.orange)
                 Button("Load WAV…") { importerVisible = true }
                     .buttonStyle(.bordered)
                     .tint(.blue)
+                Spacer()
             }
             .font(.system(size: 11, design: .monospaced))
             // Five WAVECEL params, two rows for breathing room.
