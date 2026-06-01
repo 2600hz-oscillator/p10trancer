@@ -124,6 +124,12 @@ final class AppState: ObservableObject {
             }
             return gain
         }
+        // Build the recording writer/pool at the live output canvas size so
+        // the captured frame matches the output texture (fixes the "fills
+        // ~1/4 of the screen" recording when output isn't 1280x720).
+        self.recorder.canvasSizeProvider = { [weak self] in
+            self?.mixer.outputMode.canvasSize ?? (1280, 720)
+        }
 
         RenderEngine.shared.register(self.masterMixerOffscreen)
     }

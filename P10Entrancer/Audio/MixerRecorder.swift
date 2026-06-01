@@ -2,6 +2,7 @@ import Foundation
 import AVFoundation
 import CoreVideo
 import Metal
+import MetalPerformanceShaders
 import Combine
 
 @MainActor
@@ -36,6 +37,16 @@ final class MixerRecorder: ObservableObject {
     /// nothing forces `applyAudioRouting` to run when the user moves
     /// only the camera pad's volume slider.
     var micGainProvider: (() -> Float)?
+
+    /// Resolves the output canvas dimensions at REC time so the writer and
+    /// pixel-buffer pool are built to match the live output texture. Wired
+    /// by AppState to the mixer's current canvas size. Without it `canvasSize`
+    /// stayed frozen at the stale 1280x720 default while the live output
+    /// could be a different size (e.g. NTSC 720x480) — and the unscaled blit
+    /// landed that smaller frame in the top-left, leaving the rest of the
+    /// frame uninitialized (the "recording only fills ~1/4 of the screen,
+    /// partial capture" bug). Seed it before building the writer/pool.
+    var canvasSizeProvider: (() -> (width: Int, height: Int))?
 
     var onFinish: ((URL) -> Void)?
 
@@ -78,6 +89,12 @@ final class MixerRecorder: ObservableObject {
         let url = dir.appendingPathComponent("recording-\(formatter.string(from: Date())).mp4")
         try? FileManager.default.removeItem(at: url)
 
+        // Size the writer + pool to the LIVE output canvas, not the stale
+        // default. captureFrame copies currentOutputTexture (always canvas
+        // sized) into a pool buffer of exactly these dimensions.
+        if let provided = canvasSizeProvider?() {
+            canvasSize = (provided.width, provided.height)
+        }
         let (w, h) = canvasSize
         do {
             let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
@@ -227,11 +244,11 @@ final class MixerRecorder: ObservableObject {
         if recordStartElapsed == nil { recordStartElapsed = now }
         let elapsedSinceStart = now - (recordStartElapsed ?? now)
 
-        let w = source.width
-        let h = source.height
-        if (w, h) != canvasSize {
-            canvasSize = (w, h)
-        }
+        // The pool buffers are sized to the writer (canvasSize), so the
+        // destination Metal texture MUST be wrapped at the writer's
+        // dimensions — not the source's. Wrapping at the source size is
+        // what made an unscaled blit drop a smaller frame into the corner.
+        let (dw, dh) = canvasSize
         guard let pool = pixelBufferPool else { return }
         var pixelBuffer: CVPixelBuffer?
         CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pool, &pixelBuffer)
@@ -244,12 +261,36 @@ final class MixerRecorder: ObservableObject {
         guard let cache = cache else { return }
         let status = CVMetalTextureCacheCreateTextureFromImage(
             kCFAllocatorDefault, cache, pixelBuffer, nil,
-            .bgra8Unorm, w, h, 0, &cvTexture
+            .bgra8Unorm, dw, dh, 0, &cvTexture
         )
         guard status == kCVReturnSuccess, let cvTex = cvTexture, let mtlTex = CVMetalTextureGetTexture(cvTex) else { return }
-        guard let blit = cmd.makeBlitCommandEncoder() else { return }
-        blit.copy(from: source, to: mtlTex)
-        blit.endEncoding()
+
+        if source.width == dw && source.height == dh {
+            // Fast path — sizes match (the normal case once seeded).
+            guard let blit = cmd.makeBlitCommandEncoder() else { return }
+            blit.copy(from: source, to: mtlTex)
+            blit.endEncoding()
+        } else if mtlTex.usage.contains(.shaderWrite) {
+            // Defensive: a size mismatch can only happen if the canvas
+            // changes mid-recording. Resample the whole source into the
+            // writer-sized frame rather than leaving it partly blank.
+            MPSImageBilinearScale(device: context.device)
+                .encode(commandBuffer: cmd, sourceTexture: source, destinationTexture: mtlTex)
+        } else {
+            // Last resort if the CV texture isn't shader-writable: copy the
+            // overlapping region only, clamped, so we never read/write OOB.
+            guard let blit = cmd.makeBlitCommandEncoder() else { return }
+            let cw = min(source.width, dw)
+            let ch = min(source.height, dh)
+            blit.copy(from: source,
+                      sourceSlice: 0, sourceLevel: 0,
+                      sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+                      sourceSize: MTLSize(width: cw, height: ch, depth: 1),
+                      to: mtlTex,
+                      destinationSlice: 0, destinationLevel: 0,
+                      destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
+            blit.endEncoding()
+        }
         cmd.commit()
         cmd.waitUntilCompleted()
 
