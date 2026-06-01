@@ -68,7 +68,7 @@ struct ContentView: View {
                                 macroSlotID: LFOTargets.slotID(forMacroIndex: 0),
                                 macroTitle: "MACRO 1",
                                 channelTitle: "CH1",
-                                channelAccent: .cyan,
+                                channelAccent: .blue,
                                 engine: appState.lfoEngine,
                                 transport: appState.transport
                             )
@@ -108,7 +108,7 @@ struct ContentView: View {
                                 macroSlotID: LFOTargets.slotID(forMacroIndex: 1),
                                 macroTitle: "MACRO 2",
                                 channelTitle: "CH2",
-                                channelAccent: .orange,
+                                channelAccent: .green,
                                 engine: appState.lfoEngine,
                                 transport: appState.transport
                             )

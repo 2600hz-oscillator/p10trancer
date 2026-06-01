@@ -82,9 +82,12 @@ struct PadGridView: View {
     }
 
     private func cellOverlay(index: Int) -> some View {
-        let isCh1 = mixer.ch1PadIndex == index
-        let isCh2 = mixer.ch2PadIndex == index
-        let isInspected = mixer.inspectedPadIndex == index
+        // CH1/CH2 outlines only appear when the matching channel is
+        // ARMED — they're a "you are about to reassign" indicator, not
+        // a permanent routing badge. When neither is armed the pad
+        // cells stay clean.
+        let isCh1 = mixer.pad1Armed && mixer.ch1PadIndex == index
+        let isCh2 = mixer.pad2Armed && mixer.ch2PadIndex == index
         let assignmentMode = liveRecordings.selectedID != nil
         // The Metal grid shader reserves the left `sliderStripFraction`
         // of each cell for the per-pad volume slider. The remaining
@@ -115,7 +118,6 @@ struct PadGridView: View {
                             padCellOverlays(index: index,
                                              isCh1: isCh1,
                                              isCh2: isCh2,
-                                             isInspected: isInspected,
                                              assignmentMode: assignmentMode)
                             PadMiniVUMeter(pad: pads.pads[index])
                                 .frame(width: miniVUW)
@@ -126,7 +128,11 @@ struct PadGridView: View {
             )
             .onTapGesture {
                 if liveRecordings.loadIntoPad(index) { return }
-                mixer.routeActivePad(index)
+                // Only re-route if a CH is armed; otherwise tapping
+                // a pad does nothing. Disarms-after-tap is intentional
+                // NOT happening — the user disarms by tapping the
+                // CH button again.
+                mixer.routeToArmedChannels(.pad(index))
             }
             .contextMenu { padContextMenu(index: index) }
     }
@@ -214,7 +220,6 @@ struct PadGridView: View {
     @ViewBuilder
     private func padCellOverlays(index: Int,
                                   isCh1: Bool, isCh2: Bool,
-                                  isInspected: Bool,
                                   assignmentMode: Bool) -> some View {
         ZStack(alignment: .topLeading) {
                     if assignmentMode {
@@ -223,19 +228,15 @@ struct PadGridView: View {
                         Rectangle()
                             .strokeBorder(Color.green.opacity(0.7), style: StrokeStyle(lineWidth: 2, dash: [4, 4]))
                     }
-                    if isInspected {
-                        Rectangle()
-                            .strokeBorder(Color.yellow.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
-                    }
                     if isCh1 {
                         Rectangle()
-                            .strokeBorder(Color.cyan, lineWidth: 4)
-                        chip("CH1", color: .cyan)
+                            .strokeBorder(Color.blue, lineWidth: 4)
+                        chip("CH1", color: .blue)
                     }
                     if isCh2 {
                         Rectangle()
-                            .strokeBorder(Color.orange, lineWidth: 4)
-                        chip("CH2", color: .orange)
+                            .strokeBorder(Color.green, lineWidth: 4)
+                        chip("CH2", color: .green)
                     }
                     Text("\(index + 1)")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))

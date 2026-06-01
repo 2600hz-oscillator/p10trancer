@@ -52,8 +52,11 @@ private struct OutputPadCell: View {
 
     var body: some View {
         let kind = slot.kind
-        let isCh1 = mixer.ch1Source == kind.channelSource
-        let isCh2 = mixer.ch2Source == kind.channelSource
+        // Mirror the source-pad behaviour: only show CH1/CH2 routing
+        // outlines when the matching channel is ARMED. Keeps the FX
+        // row clean when the user isn't trying to reassign.
+        let isCh1 = mixer.pad1Armed && mixer.ch1Source == kind.channelSource
+        let isCh2 = mixer.pad2Armed && mixer.ch2Source == kind.channelSource
         let baseTint: Color = {
             switch kind {
             case .keyer: return .green
@@ -61,7 +64,7 @@ private struct OutputPadCell: View {
             case .xyz: return .pink
             }
         }()
-        let routedColor: Color = isCh1 ? .cyan : (isCh2 ? .orange : baseTint.opacity(0.5))
+        let routedColor: Color = isCh1 ? .blue : (isCh2 ? .green : baseTint.opacity(0.5))
 
         ZStack(alignment: .topLeading) {
             preview(kind: kind)
@@ -80,14 +83,14 @@ private struct OutputPadCell: View {
                         Text("CH1")
                             .font(.system(size: 11, weight: .heavy, design: .monospaced))
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(.cyan).foregroundStyle(.black)
+                            .background(.blue).foregroundStyle(.black)
                             .padding(.top, 6)
                     }
                     if isCh2 {
                         Text("CH2")
                             .font(.system(size: 11, weight: .heavy, design: .monospaced))
                             .padding(.horizontal, 6).padding(.vertical, 2)
-                            .background(.orange).foregroundStyle(.black)
+                            .background(.green).foregroundStyle(.black)
                             .padding(.top, 6)
                     }
                     Spacer()
@@ -121,10 +124,10 @@ private struct OutputPadCell: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            switch mixer.activeChannel {
-            case .ch1: mixer.ch1Source = kind.channelSource
-            case .ch2: mixer.ch2Source = kind.channelSource
-            }
+            // Same rule as source pads: only route when armed. Avoids
+            // accidentally swapping a CH source by tapping the FX pad
+            // while trying to scroll past it.
+            mixer.routeToArmedChannels(kind.channelSource)
         }
         .sheet(isPresented: $settingsPresented) {
             outputPadSettings(for: kind)

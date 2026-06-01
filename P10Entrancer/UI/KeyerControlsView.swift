@@ -40,8 +40,8 @@ private struct KeyerEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                routeButton(channel: .ch1, label: "→ CH1", tint: .cyan)
-                routeButton(channel: .ch2, label: "→ CH2", tint: .orange)
+                routeButton(channel: .ch1, label: "→ CH1", tint: .blue)
+                routeButton(channel: .ch2, label: "→ CH2", tint: .green)
             }
             padPicker("FG", $keyer.foregroundPadIndex)
             padPicker("BG", $keyer.backgroundPadIndex)

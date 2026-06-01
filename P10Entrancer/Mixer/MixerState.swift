@@ -60,6 +60,11 @@ final class MixerState: ObservableObject {
     @Published var ch1Source: ChannelSource = .pad(0)
     @Published var ch2Source: ChannelSource = .pad(1)
     @Published var activeChannel: ActiveChannel = .ch1
+    /// Arming toggles for source reassignment. Both default OFF — tapping
+    /// a source pad (or FX pad) only re-routes when at least one of these
+    /// is on. Tapping the CH1/CH2 buttons in the bottom bar toggles them.
+    @Published var pad1Armed: Bool = false
+    @Published var pad2Armed: Bool = false
     @Published var transition: TransitionKind = .crossfade
     @Published var position: Float = 0
     @Published var keyColor: SIMD3<Float> = .init(0, 1, 0)
@@ -96,6 +101,16 @@ final class MixerState: ObservableObject {
         case .ch1: ch1Source = .pad(index)
         case .ch2: ch2Source = .pad(index)
         }
+    }
+
+    /// Route a source to whichever channels are armed. No-op if neither
+    /// is armed — that's the whole point of the arming model.
+    @discardableResult
+    func routeToArmedChannels(_ source: ChannelSource) -> Bool {
+        guard pad1Armed || pad2Armed else { return false }
+        if pad1Armed { ch1Source = source }
+        if pad2Armed { ch2Source = source }
+        return true
     }
 
     func routeKeyerTo(_ channel: ActiveChannel) {

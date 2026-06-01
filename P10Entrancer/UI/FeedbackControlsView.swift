@@ -40,8 +40,8 @@ private struct FeedbackEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                routeButton(channel: .ch1, label: "→ CH1", tint: .cyan)
-                routeButton(channel: .ch2, label: "→ CH2", tint: .orange)
+                routeButton(channel: .ch1, label: "→ CH1", tint: .blue)
+                routeButton(channel: .ch2, label: "→ CH2", tint: .green)
             }
             padPicker("Source pad", $state.sourcePadIndex)
             slider("Zoom",     $state.zoom,        in: 0.5...4.0,   format: "%.2f×")

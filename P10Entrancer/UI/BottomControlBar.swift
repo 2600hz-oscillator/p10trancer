@@ -223,14 +223,17 @@ struct BottomControlBar: View {
 
     private var channelBlock: some View {
         HStack(spacing: 8) {
-            bigChannelButton(channel: .ch1, label: "CH 1", tint: .cyan, source: mixer.ch1Source)
-            bigChannelButton(channel: .ch2, label: "CH 2", tint: .orange, source: mixer.ch2Source)
+            bigChannelButton(channel: .ch1, label: "CH 1", tint: .blue, source: mixer.ch1Source)
+            bigChannelButton(channel: .ch2, label: "CH 2", tint: .green, source: mixer.ch2Source)
         }
         .frame(width: 220)
     }
 
+    /// CH1 / CH2 buttons are independent ARM toggles. Tap once to arm
+    /// (button lights up tint); tap again to disarm. Reassigning a
+    /// pad only happens when at least one is armed.
     private func bigChannelButton(channel: ActiveChannel, label: String, tint: Color, source: ChannelSource) -> some View {
-        let isActive = mixer.activeChannel == channel
+        let isArmed: Bool = channel == .ch1 ? mixer.pad1Armed : mixer.pad2Armed
         let sub: String
         switch source {
         case .pad(let i): sub = "PAD \(i + 1)"
@@ -238,7 +241,12 @@ struct BottomControlBar: View {
         case .feedback: sub = "FB"
         case .xyz: sub = "XYZ"
         }
-        return Button(action: { mixer.activeChannel = channel }) {
+        return Button(action: {
+            switch channel {
+            case .ch1: mixer.pad1Armed.toggle()
+            case .ch2: mixer.pad2Armed.toggle()
+            }
+        }) {
             VStack(spacing: 2) {
                 Text(label)
                     .font(.system(size: 14, weight: .heavy, design: .monospaced))
@@ -247,10 +255,10 @@ struct BottomControlBar: View {
                     .opacity(0.9)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(isActive ? tint : Color.white.opacity(0.10))
-            .foregroundStyle(isActive ? Color.black : Color.white)
+            .background(isArmed ? tint : Color.white.opacity(0.10))
+            .foregroundStyle(isArmed ? Color.black : Color.white)
             .overlay(
-                Rectangle().strokeBorder(isActive ? tint : Color.white.opacity(0.3), lineWidth: isActive ? 2 : 1)
+                Rectangle().strokeBorder(isArmed ? tint : Color.white.opacity(0.3), lineWidth: isArmed ? 2 : 1)
             )
         }
         .buttonStyle(.plain)
