@@ -9,7 +9,7 @@ import Combine
 /// rests are silent and tonal models articulate. Built as a sibling of
 /// ACIDBASS; visualizer is a cool cyan/violet interference plasma.
 @MainActor
-final class MultiplatesSource: PadSource, ObservableObject {
+final class MultiplatesSource: PadSource, ObservableObject, LiveNotePlayable {
     private(set) var currentTexture: MTLTexture?
     let displayAspect: Float = 16.0 / 9.0
 
@@ -99,6 +99,22 @@ final class MultiplatesSource: PadSource, ObservableObject {
     func toggleStep(_ stepIndex: Int) {
         guard sequencer.steps.indices.contains(stepIndex) else { return }
         sequencer.steps[stepIndex].enabled.toggle()
+    }
+
+    // MARK: - Live MIDI play (LiveNotePlayable)
+
+    private var midiHeldNote: Int?
+
+    func playNoteOn(midiNote: Int, velocity: Int) {
+        let model = MacroModel(rawValue: lastModel) ?? .va
+        renderer.gate(midiNote: midiNote, model: model, on: true)
+        midiHeldNote = midiNote
+    }
+    func playNoteOff(midiNote: Int) {
+        if midiNote == midiHeldNote {
+            renderer.gate(midiNote: midiNote, model: MacroModel(rawValue: lastModel) ?? .va, on: false)
+            midiHeldNote = nil
+        }
     }
 
     /// Audition a live note using the current macros + the cursored step's

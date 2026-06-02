@@ -12,7 +12,7 @@ import AVFoundation
 /// Owns an internal PadAudioPlayer in synth mode so the pad still
 /// exposes the standard volume / mute / route / VU meter surface.
 @MainActor
-final class InstrumentSource: PadSource, ObservableObject {
+final class InstrumentSource: PadSource, ObservableObject, LiveNotePlayable {
     private(set) var currentTexture: MTLTexture?
     let displayAspect: Float = 16.0 / 9.0
 
@@ -152,6 +152,19 @@ final class InstrumentSource: PadSource, ObservableObject {
         let midi = (octave + 1) * 12 + semitoneFromC
         sequencer.steps[stepIndex].note = midi
         sequencer.steps[stepIndex].enabled = true
+    }
+
+    // MARK: - Live MIDI play (LiveNotePlayable)
+
+    private var midiHeldNote: Int?
+
+    func playNoteOn(midiNote: Int, velocity: Int) {
+        synth.frequencyHz = StepSequencer.frequencyHz(forNote: midiNote)
+        adsr.setGate(true)
+        midiHeldNote = midiNote
+    }
+    func playNoteOff(midiNote: Int) {
+        if midiNote == midiHeldNote { adsr.setGate(false); midiHeldNote = nil }
     }
 
     func toggleStep(_ stepIndex: Int) {

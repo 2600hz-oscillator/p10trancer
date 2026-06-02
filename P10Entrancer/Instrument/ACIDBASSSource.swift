@@ -10,7 +10,7 @@ import Combine
 /// amber→magenta tones — deliberately distinct from ACIDKICK's diagonal
 /// red/orange bands — that pulses on the beat and brightens with level.
 @MainActor
-final class ACIDBASSSource: PadSource, ObservableObject {
+final class ACIDBASSSource: PadSource, ObservableObject, LiveNotePlayable {
     private(set) var currentTexture: MTLTexture?
     let displayAspect: Float = 16.0 / 9.0
 
@@ -129,6 +129,19 @@ final class ACIDBASSSource: PadSource, ObservableObject {
     func toggleStep(_ stepIndex: Int) {
         guard sequencer.steps.indices.contains(stepIndex) else { return }
         sequencer.steps[stepIndex].enabled.toggle()
+    }
+
+    // MARK: - Live MIDI play (LiveNotePlayable)
+
+    private var midiHeldNote: Int?
+
+    func playNoteOn(midiNote: Int, velocity: Int) {
+        renderer.noteOn(noteCv: BassSequencer.noteCv(forNote: midiNote),
+                        accented: velocity >= 96, glide: false)
+        midiHeldNote = midiNote
+    }
+    func playNoteOff(midiNote: Int) {
+        if midiNote == midiHeldNote { renderer.noteOff(); midiHeldNote = nil }
     }
 
     /// Audition a live note (keyboard tapped with no step cursor).

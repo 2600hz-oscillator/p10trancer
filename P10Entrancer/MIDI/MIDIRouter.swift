@@ -21,7 +21,8 @@ final class MIDIRouter: ObservableObject {
     private static let recentEventsCap = 60
 
     private(set) var lastEventDescription: String = ""
-    var onNoteOn: ((Int, Int) -> Void)?
+    var onNoteOn: ((Int, Int, Int) -> Void)?   // (note, velocity, channel)
+    var onNoteOff: ((Int, Int) -> Void)?        // (note, channel)
     /// Called with (cc, value, channel). `channel` is 0-15 (MIDI ch 1-16).
     /// Receivers that don't care about channel can ignore the third arg.
     var onControlChange: ((Int, Int, Int) -> Void)?
@@ -171,7 +172,13 @@ final class MIDIRouter: ObservableObject {
             let note = Int(voiceBytes[1])
             let velocity = Int(voiceBytes[2])
             recordEvent("ch\(channel + 1) note \(note) vel \(velocity)")
-            onNoteOn?(note, velocity)
+            onNoteOn?(note, velocity, channel)
+        case 0x80 where voiceBytes.count >= 3,
+             0x90 where voiceBytes.count >= 3 && voiceBytes[2] == 0:
+            // note-off, or note-on with velocity 0 (common note-off form).
+            let note = Int(voiceBytes[1])
+            recordEvent("ch\(channel + 1) note-off \(note)")
+            onNoteOff?(note, channel)
         case 0xB0 where voiceBytes.count >= 3:
             let cc = Int(voiceBytes[1])
             let value = Int(voiceBytes[2])

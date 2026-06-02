@@ -13,7 +13,7 @@ import CoreText
 /// style glitch field with a rainbow waveform overlay; a comic-book
 /// POW! caption flashes when a kick fires.
 @MainActor
-final class ACIDKICKSource: PadSource, ObservableObject {
+final class ACIDKICKSource: PadSource, ObservableObject, LiveNotePlayable {
     private(set) var currentTexture: MTLTexture?
     let displayAspect: Float = 16.0 / 9.0
 
@@ -113,6 +113,18 @@ final class ACIDKICKSource: PadSource, ObservableObject {
             }
         }
     }
+
+    // MARK: - Live MIDI play (LiveNotePlayable)
+
+    /// General-MIDI-ish drum note → track map (kick/snare/hat/tom).
+    private static let drumNoteMap: [Int: Int] = [36: 0, 38: 1, 40: 1, 42: 2, 46: 2, 45: 3, 47: 3, 48: 3, 50: 3]
+
+    func playNoteOn(midiNote: Int, velocity: Int) {
+        if let track = Self.drumNoteMap[midiNote], voices.indices.contains(track) {
+            voices[track].trigger()
+        }
+    }
+    func playNoteOff(midiNote: Int) {}   // drum voices are one-shots
 
     func tick(timestamp: CFTimeInterval) {
         // Stride between redraws comes from AppState.thumbnailQuality.

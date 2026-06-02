@@ -32,9 +32,18 @@ final class MIDIBindings {
         self.xyJoystick = xyJoystick
     }
 
+    /// MIDI channel (0-based) → pad index for live instrument play. Channels
+    /// 1-9 (0-8) play the instrument on pad 1-9; channel 16 (15) keeps the
+    /// legacy note route/play/mute control mapping. See ELECTRA_ONE_MIDI_INFO.
+    private let noteChannelToPad: [Int: Int] =
+        Dictionary(uniqueKeysWithValues: (0..<PadSystem.padCount).map { ($0, $0) })
+
     func attach(to router: MIDIRouter) {
-        router.onNoteOn = { [weak self] note, _ in
-            self?.handleNoteOn(note)
+        router.onNoteOn = { [weak self] note, vel, channel in
+            self?.routeNoteOn(note: note, velocity: vel, channel: channel)
+        }
+        router.onNoteOff = { [weak self] note, channel in
+            self?.routeNoteOff(note: note, channel: channel)
         }
         router.onControlChange = { [weak self] cc, value, channel in
             self?.handleCC(cc: cc, value: value, channel: channel)
@@ -53,7 +62,27 @@ final class MIDIBindings {
         output?.muted = false
     }
 
-    // MARK: - Note On (alternate pad triggers)
+    // MARK: - Live instrument note play
+
+    /// Channels 1-9 play the instrument on the corresponding pad live (note +
+    /// velocity); channel 16 routes to the legacy note control map. Live notes
+    /// are NOT echoed to MIDI output (performance input, not state), so no
+    /// withMutedOutput here — and the cost is just a voice-event enqueue.
+    func routeNoteOn(note: Int, velocity: Int, channel: Int) {
+        if channel == 15 { handleNoteOn(note); return }
+        guard let pad = noteChannelToPad[channel], pads.pads.indices.contains(pad),
+              let inst = pads.pads[pad].source as? LiveNotePlayable else { return }
+        inst.playNoteOn(midiNote: note, velocity: velocity)
+    }
+
+    func routeNoteOff(note: Int, channel: Int) {
+        guard channel != 15, let pad = noteChannelToPad[channel],
+              pads.pads.indices.contains(pad),
+              let inst = pads.pads[pad].source as? LiveNotePlayable else { return }
+        inst.playNoteOff(midiNote: note)
+    }
+
+    // MARK: - Note On (legacy control map — channel 16)
 
     func handleNoteOn(_ note: Int) {
         withMutedOutput {
