@@ -97,13 +97,24 @@ struct SidechainDucker {
     private var hpfYPrev: Float = 0
     private var smGainDb: Float = 0   // smoothed gain reduction, <= 0 dB
 
+    // Cached coefficients — the HPF / attack / release coeffs depend only on
+    // params that are constant within a render block, so recompute them only
+    // when their inputs change (bit-identical output, ~3 fewer expf/sample).
+    private var aHp: Float = 0, aAtt: Float = 0, aRel: Float = 0
+    private var cHpf: Float = -1, cAtt: Float = -1, cRel: Float = -1, cSr: Float = -1
+
     mutating func reset() { hpfXPrev = 0; hpfYPrev = 0; smGainDb = 0 }
 
     /// Returns the duck gain multiplier (≤ 1) for one sample, given the
     /// trigger (key) sample.
     mutating func processGain(trigger key: Float, params p: SidechainSnapshot, sampleRate sr: Float) -> Float {
+        if p.scHpfHz != cHpf || p.attackMs != cAtt || p.releaseMs != cRel || sr != cSr {
+            aHp = expf(-2.0 * .pi * max(1, p.scHpfHz) / sr)
+            aAtt = expf(-1.0 / (max(0.01, p.attackMs) * 0.001 * sr))
+            aRel = expf(-1.0 / (max(0.01, p.releaseMs) * 0.001 * sr))
+            cHpf = p.scHpfHz; cAtt = p.attackMs; cRel = p.releaseMs; cSr = sr
+        }
         // Detector high-pass (one-pole).
-        let aHp = expf(-2.0 * .pi * max(1, p.scHpfHz) / sr)
         let det = aHp * (hpfYPrev + key - hpfXPrev)
         hpfXPrev = key
         hpfYPrev = det
@@ -127,9 +138,7 @@ struct SidechainDucker {
         }
 
         // Asymmetric dB smoother: fast when increasing reduction (attack),
-        // slower when recovering (release).
-        let aAtt = expf(-1.0 / (max(0.01, p.attackMs) * 0.001 * sr))
-        let aRel = expf(-1.0 / (max(0.01, p.releaseMs) * 0.001 * sr))
+        // slower when recovering (release). Coeffs are cached above.
         let a = targetDb < smGainDb ? aAtt : aRel
         smGainDb = a * smGainDb + (1 - a) * targetDb
 
