@@ -37,7 +37,12 @@ final class AppState: ObservableObject {
     let midiOutputBindings: MIDIOutputBindings
     let automation: AutomationEngine
     let thermalMonitor: ThermalMonitor
+    #if DEBUG
+    // Dev-only on-device screenshot capture (pulled by scripts/fetch.sh --shots).
+    // Excluded from Release so it never hitches the main thread or writes
+    // screenshots into the user-visible Documents folder on shipped builds.
     let screenshotCapturer: ScreenshotCapturer
+    #endif
     let recorder: MixerRecorder
     let liveRecordings: LiveRecordingsStore
     let cameras = CameraRegistry()
@@ -98,7 +103,9 @@ final class AppState: ObservableObject {
         self.midiBindings.output = self.midiOutputBindings
         self.automation = AutomationEngine()
         self.thermalMonitor = ThermalMonitor(pads: pads)
+        #if DEBUG
         self.screenshotCapturer = ScreenshotCapturer()
+        #endif
         self.recorder = recorder
         self.liveRecordings = LiveRecordingsStore(pads: pads, mixer: mixer)
         self.masterMixerOffscreen.recorder = self.recorder
@@ -179,7 +186,9 @@ final class AppState: ObservableObject {
         Task { await self.cameras.startIfNeeded() }
         applyDefaultPresetIfAny()
         RenderEngine.shared.start()
+        #if DEBUG
         screenshotCapturer.start()
+        #endif
         wireAudioRouting()
         registerLFOTargets()
         xyJoystick.attach(engine: lfoEngine)

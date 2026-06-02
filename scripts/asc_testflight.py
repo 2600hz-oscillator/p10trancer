@@ -279,26 +279,35 @@ class ASC:
 
 
 WHAT_TO_TEST = """\
-2.0.1 — bugfix round.
+2.0.2 — new instruments, MIDI note-play, and a reworked output pipeline (plus bugfixes).
 
-What changed:
-- Per-pad mute, volume, and VU now work correctly on instrument pads (previously the slider/icon updates didn't take effect even though audio was audible).
-- 'End Session?' alert no longer pops up spuriously on cold launch.
-- FX pad thumbnails (keyer / feedback) render smoothly — no more jitter and no first-frame 'slash of content at the top' on launch.
-- X/Y joystick macro: assign two LFO targets to one pad.
-- Per-pad letterbox / fill toggle (top-right icon on each pad).
-- HD output post-processing + new side-strip output FX panels.
-- Per-pad VU + volume slider; mini VU on camera and mic pads.
-- In-app share for live clips; Documents/UserVideos visible in Files.
+What's new:
+- Output geometry reworked: HD/NTSC output modes replaced with 4:3 and 16:9, each with its own square-pixel resolution list (4:3: 320x240 up to 1440x1080; 16:9: 426x240 up to 1920x1080). Switch geometry instantly from the bottom bar; pick resolution in the new Settings OUTPUT tab.
+- Output FX unified: color grade now runs always (identity at defaults) and the analog/NTSC look is a single explicit ON/OFF toggle that works in either geometry.
+- Per-pad scaling: each pad defaults to zoom-fit (fill / cover-crop); the top-right toggle switches to letterbox (show-all with real black bars). A green "N" (Native) badge shows when the source already matches the output aspect and there's nothing to fit.
+- Cameras now use the full sensor frame at their true aspect (dropped the old hard 4:3 crop); the new per-pad normalization fits them to the output geometry.
+- ACIDBASS: new TB-303-style bass instrument — 16-step pitched mono sequencer (gate/note/accent/slide with 303 glide), 303 voice knobs, acidwarp plasma visualizer, plus a raw-sample sidechain so a kick pad can duck the bass (amount/attack/release/threshold/ratio/SC-HPF).
+- MULTIPLATES: new 14-engine macro instrument (VA, waveshape, FM 2OP/6OP, chord, additive, string, modal, kick, snare, hihat, wavetable, granular, speech) with a 16-step sequencer and per-step model selection.
+- WAVETABLE: wave bank expanded to 46 presets, now chosen from a menu picker.
+- Live MIDI note-play: WAVETABLE / ACIDBASS / MULTIPLATES / ACIDKICK can be played live from MIDI notes, with channels 1-9 routed to pads 1-9 (mono, last-note) and channel 16 driving the legacy control map.
+- Feedback FX: new Wet/Dry knob (0 = clean source passes through, 1 = full feedback hall-of-mirrors); also available as an LFO target.
+- Instrument persistence: all 4 instruments (ACIDKICK, ACIDBASS, MULTIPLATES, WAVETABLE) now save and restore their patches and patterns in sessions (older sessions still load).
+- Arm-then-tap pad assignment: the Pad1 / Pad2 buttons are now independent arm toggles — a tap only reassigns a pad when a channel is armed. Channel outlines recolored blue (CH1) / green (CH2).
+- Tempo / performance fixes: corrected instrument tempo drift under load, capped instrument visualizers, and moved instrument DSP and sidechain coefficient work out of the audio render lock.
+- Fixed instrument knob sliders (ACIDBASS / ACIDKICK) that couldn't be dragged; shared on-screen keyboard note entry for ACIDBASS and WAVETABLE.
 
-Things to confirm:
-- Mute and volume control work on instrument pads (WAVECEL / ACIDKICK)
-- No false 'End Session?' prompt on app open
-- FX pad previews look smooth (no jitter / no startup artifact)
-- X/Y joystick smoothly cross-modulates two LFO targets
+Please confirm:
+- Switch output between 16:9 and 4:3 (bottom bar) and change resolution in Settings > OUTPUT — output and recordings fill the frame at every size, with no quarter-frame or partial-fill capture.
+- Per pad, toggle fill vs letterbox (top-right icon): fill crops to cover, letterbox shows the whole frame with clean black bars; confirm the green "N" badge appears when a source already matches the output aspect.
+- Play ACIDBASS, MULTIPLATES, and WAVETABLE live from a MIDI controller on channels 1-9 and confirm the right pad sounds; drag the instrument knobs and confirm they move smoothly.
+- Set ACIDBASS sidechain to a kick pad and confirm the bass ducks on each kick hit.
+- Run two instruments at once at tempo and confirm timing stays steady (no tempo drift/slowdown) with no audio dropouts.
+- Save a session with all four instruments patched, reload it, and confirm patches and patterns come back; verify the feedback Wet/Dry knob sweeps from clean to full feedback.
 
 Known issues:
-- Recording cuts video PTS at first frame (intentional) — the first ~16ms isn't visible
+- The per-pad normalization render-graph change is large; on-device performance at high resolution and the keyer / XYZ / feedback look should be sanity-checked.
+- ACIDKICK per-voice params restore one step late on session load (the voice type rebuilds asynchronously).
+- Recording cuts video PTS at the first frame (intentional) — the first ~16ms isn't visible.
 """
 
 BETA_DESCRIPTION = """\
