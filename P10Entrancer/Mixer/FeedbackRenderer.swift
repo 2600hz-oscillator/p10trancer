@@ -72,7 +72,8 @@ final class FeedbackRenderer {
             persistence: state.decay,
             inputGain: state.feedbackMix,
             bloom: state.luminosity,
-            chromaBoost: state.chromaBoost
+            chromaBoost: state.chromaBoost,
+            wetDry: state.wetDry
         )
 
         encoder.setRenderPipelineState(pipeline)
@@ -121,4 +122,5 @@ private struct FeedbackParamsBuffer {
     var inputGain: Float
     var bloom: Float
     var chromaBoost: Float
+    var wetDry: Float
 }

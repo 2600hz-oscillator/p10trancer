@@ -44,6 +44,7 @@ private struct FeedbackEditor: View {
                 routeButton(channel: .ch2, label: "→ CH2", tint: .green)
             }
             padPicker("Source pad", $state.sourcePadIndex)
+            slider("Wet / Dry", $state.wetDry,     in: 0...1,       format: "%.2f")
             slider("Zoom",     $state.zoom,        in: 0.5...4.0,   format: "%.2f×")
             slider("Pan X",    $state.panX,        in: -1...1,      format: "%.2f")
             slider("Pan Y",    $state.panY,        in: -1...1,      format: "%.2f")
@@ -52,7 +53,7 @@ private struct FeedbackEditor: View {
             slider("Input Gain",  $state.feedbackMix, in: 0...2.0,   format: "%.2f")
             slider("Bloom",       $state.luminosity,  in: 0.2...3.0, format: "%.2f×")
             slider("Chroma boost", $state.chromaBoost, in: 0...3, format: "%.2f×")
-            Text("Persistence is the per-frame fade — 0.95+ gives camera-into-CRT trails. Input Gain decides how brightly the live signal punches through; >1 makes fresh frames overpower long trails. Bloom drives the highlight rolloff in the tonemap.")
+            Text("Wet/Dry blends the clean source against the feedback — fully wet + zoom in/out gives the hall-of-mirrors. Persistence is the per-frame fade (0.95+ gives camera-into-CRT trails). Input Gain decides how brightly the live signal punches through; >1 makes fresh frames overpower long trails. Bloom drives the highlight rolloff in the tonemap.")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.4))
         }

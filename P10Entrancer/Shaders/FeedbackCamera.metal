@@ -27,6 +27,9 @@ struct FBParams {
     /// Saturation push on the previous-frame sample to fight chroma
     /// loss in linear sampling.
     float chromaBoost;
+    /// Wet/dry mix: 0 = pass the clean source through, 1 = pure feedback
+    /// result (hall of mirrors on zoom).
+    float wetDry;
 };
 
 vertex FBVOut feedbackCameraVertex(uint vid [[vertex_id]]) {
@@ -84,6 +87,10 @@ fragment half4 feedbackCameraFragment(
     // x / (x + 1) tonemap, per channel. Preserves color hue (unlike
     // luma-based tonemaps that desaturate highlights) and asymptotes
     // smoothly to 1 so bright spots don't hard-clip.
-    half3 outColor = driven / (driven + 1.0h);
+    half3 wet = driven / (driven + 1.0h);
+    // Wet/dry blend against the clean live source. Note the recirculated
+    // buffer stores this blended result, so at full wet the feedback fully
+    // recirculates (hall of mirrors) and at full dry it's just the source.
+    half3 outColor = mix(srcSample, wet, half(clamp(params.wetDry, 0.0, 1.0)));
     return half4(outColor, 1.0h);
 }

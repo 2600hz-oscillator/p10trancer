@@ -51,6 +51,12 @@ final class FeedbackState: ObservableObject {
     /// loss from repeated linear sampling. Range 0…3; 1.0 is neutral.
     @Published var chromaBoost: Float = 1.5
 
+    /// Wet/dry mix between the clean input source (dry) and the recursive
+    /// feedback result (wet). 0 = pass the source through untouched; 1 =
+    /// pure feedback (zoom in/out for the camera-pointed-at-a-TV hall of
+    /// mirrors). Default 1.0 preserves the prior all-feedback behavior.
+    @Published var wetDry: Float = 1.0
+
     init(inputSource: SourceRef = .pad(0)) {
         self.inputSource = inputSource
     }

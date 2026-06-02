@@ -357,6 +357,10 @@ enum LFOTargets {
                       displayName: "FEEDBACK: Chroma Boost", range: 0...3,
                       getBase: { state.chromaBoost },
                       setEffective: { state.chromaBoost = $0 }),
+            LFOTarget(id: "feedback.wetDry",
+                      displayName: "FEEDBACK: Wet/Dry", range: 0...1,
+                      getBase: { state.wetDry },
+                      setEffective: { state.wetDry = $0 }),
         ]
     }
 
