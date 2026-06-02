@@ -237,6 +237,11 @@ final class MultiplatesRenderer: PadStereoRenderer, @unchecked Sendable {
     private let recentLock = NSLock()
     private var scratch: [Float] = []
 
+    // Sidechain trigger publishing.
+    var triggerBus: TriggerBus?
+    var busPadIndex: Int = -1
+    private var scratchPub: [Float] = []
+
     init(voice: MacroVoice) {
         self.voice = voice
         recent = [Float](repeating: 0, count: Self.bufferSize)
@@ -297,6 +302,12 @@ final class MultiplatesRenderer: PadStereoRenderer, @unchecked Sendable {
         writeIdx = idx
         peakValue = blockPeak
         recentLock.unlock()
+
+        if let bus = triggerBus, busPadIndex >= 0 {
+            if scratchPub.count < count { scratchPub = [Float](repeating: 0, count: count) }
+            for i in 0..<count { scratchPub[i] = (left[i] + right[i]) * 0.5 }
+            scratchPub.withUnsafeBufferPointer { bus.publish(pad: busPadIndex, samples: $0.baseAddress!, count: count) }
+        }
     }
 
     func snapshotRecentSamples() -> [Float] {

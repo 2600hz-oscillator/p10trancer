@@ -78,7 +78,7 @@ struct PadGridView: View {
             set: { acidbassSheetPadIndex = $0?.id }
         )) { target in
             if let bass = pads.pads[target.id].source as? ACIDBASSSource {
-                ACIDBASSSettingsSheet(source: bass)
+                ACIDBASSSettingsSheet(source: bass, padIndex: target.id)
             }
         }
         .sheet(item: Binding(

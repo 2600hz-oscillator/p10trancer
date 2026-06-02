@@ -473,6 +473,11 @@ final class ACIDKICKRenderer: PadStereoRenderer, @unchecked Sendable {
     private var scratchR: [Float] = []
     private let recentLock = NSLock()
 
+    // Sidechain trigger publishing (so other pads can duck under this kick).
+    var triggerBus: TriggerBus?
+    var busPadIndex: Int = -1
+    private var scratchPub: [Float] = []
+
     static let bufferSize = 1024
 
     init(voices: [DrumVoice]) {
@@ -549,6 +554,11 @@ final class ACIDKICKRenderer: PadStereoRenderer, @unchecked Sendable {
         for i in 0..<count {
             left[i] = max(-1, min(1, left[i] * 0.7))
             right[i] = max(-1, min(1, right[i] * 0.7))
+        }
+        if let bus = triggerBus, busPadIndex >= 0 {
+            if scratchPub.count < count { scratchPub = [Float](repeating: 0, count: count) }
+            for i in 0..<count { scratchPub[i] = (left[i] + right[i]) * 0.5 }
+            scratchPub.withUnsafeBufferPointer { bus.publish(pad: busPadIndex, samples: $0.baseAddress!, count: count) }
         }
     }
 

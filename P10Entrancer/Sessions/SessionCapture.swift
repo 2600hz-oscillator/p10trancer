@@ -213,7 +213,11 @@ enum SessionCapture {
                     envMod: v.envAmount01, decay: v.decayMs, accent: v.accentAmount01,
                     waveform: v.waveform, overdrive: v.overdrive, glide: v.glideTime,
                     octave: bass.octave,
-                    vizWarp: bass.vizWarpSpeed, vizHue: bass.vizHueSpeed, vizZoom: bass.vizZoom)
+                    vizWarp: bass.vizWarpSpeed, vizHue: bass.vizHueSpeed, vizZoom: bass.vizZoom,
+                    scEnabled: bass.sidechain.enabled, scTriggerPad: bass.sidechain.triggerPad,
+                    scAmount: bass.sidechain.amount, scAttack: bass.sidechain.attackMs,
+                    scRelease: bass.sidechain.releaseMs, scThreshold: bass.sidechain.thresholdDb,
+                    scRatio: bass.sidechain.ratio, scHpf: bass.sidechain.scHpfHz)
             } else if let multi = source as? MultiplatesSource {
                 kind = .multiplates
                 let v = multi.voice
@@ -310,6 +314,16 @@ enum SessionCapture {
                 v.waveform = s.waveform; v.overdrive = s.overdrive; v.glideTime = s.glide
                 bass.octave = s.octave
                 bass.vizWarpSpeed = s.vizWarp; bass.vizHueSpeed = s.vizHue; bass.vizZoom = s.vizZoom
+                if let en = s.scEnabled {
+                    bass.sidechain.enabled = en
+                    bass.sidechain.triggerPad = s.scTriggerPad
+                    if let a = s.scAmount { bass.sidechain.amount = a }
+                    if let a = s.scAttack { bass.sidechain.attackMs = a }
+                    if let r = s.scRelease { bass.sidechain.releaseMs = r }
+                    if let t = s.scThreshold { bass.sidechain.thresholdDb = t }
+                    if let r = s.scRatio { bass.sidechain.ratio = r }
+                    if let h = s.scHpf { bass.sidechain.scHpfHz = h }
+                }
             }
         case .multiplates:
             appState.setMultiplatesSource(at: i)

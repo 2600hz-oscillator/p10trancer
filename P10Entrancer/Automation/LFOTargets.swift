@@ -213,6 +213,23 @@ enum LFOTargets {
                           getBase: { Float(bass.vizZoom) },
                           setEffective: { bass.vizZoom = Double($0) }),
             ]
+            targets += [
+                LFOTarget(id: "pad.\(index).bass.sc.amount",
+                          displayName: "PAD \(padNumber): SIDECHAIN — Amount",
+                          range: 0...1,
+                          getBase: { bass.sidechain.amount },
+                          setEffective: { bass.sidechain.amount = $0 }),
+                LFOTarget(id: "pad.\(index).bass.sc.attack",
+                          displayName: "PAD \(padNumber): SIDECHAIN — Attack",
+                          range: 0.5...100,
+                          getBase: { bass.sidechain.attackMs },
+                          setEffective: { bass.sidechain.attackMs = $0 }),
+                LFOTarget(id: "pad.\(index).bass.sc.release",
+                          displayName: "PAD \(padNumber): SIDECHAIN — Release",
+                          range: 5...1000,
+                          getBase: { bass.sidechain.releaseMs },
+                          setEffective: { bass.sidechain.releaseMs = $0 }),
+            ]
         }
         // MULTIPLATES — global macros + background, all LFO-able.
         if let multi = pad.source as? MultiplatesSource {

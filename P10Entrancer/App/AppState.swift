@@ -455,8 +455,13 @@ final class AppState: ObservableObject {
     /// Replace a pad's source with a fresh ACIDKICK drum machine.
     /// Each pad gets its own 4-track sequencer + voices so patterns
     /// don't share state across pads.
+    /// Cross-pad raw-audio bus for sidechain ducking (kick → bass pump).
+    let triggerBus = TriggerBus(padCount: PadSystem.padCount)
+
     func setACIDKICKSource(at index: Int) {
         let drums = ACIDKICKSource(transport: transport)
+        drums.renderer.triggerBus = triggerBus
+        drums.renderer.busPadIndex = index
         pads.setSource(drums, at: index)
         P10Logger.log("[AppState] pad \(index + 1) source → Instrument (ACIDKICK)")
     }
@@ -466,6 +471,8 @@ final class AppState: ObservableObject {
     /// state across pads.
     func setACIDBASSSource(at index: Int) {
         let bass = ACIDBASSSource(transport: transport)
+        bass.renderer.triggerBus = triggerBus
+        bass.renderer.busPadIndex = index
         pads.setSource(bass, at: index)
         P10Logger.log("[AppState] pad \(index + 1) source → Instrument (ACIDBASS)")
     }
@@ -474,6 +481,8 @@ final class AppState: ObservableObject {
     /// pad gets its own voice + 16-step sequencer.
     func setMultiplatesSource(at index: Int) {
         let multi = MultiplatesSource(transport: transport)
+        multi.renderer.triggerBus = triggerBus
+        multi.renderer.busPadIndex = index
         pads.setSource(multi, at: index)
         P10Logger.log("[AppState] pad \(index + 1) source → Instrument (MULTIPLATES)")
     }

@@ -27,6 +27,10 @@ final class ACIDBASSSource: PadSource, ObservableObject {
     /// Keyboard octave for note entry (note = (octave+1)*12 + semitone).
     @Published var octave: Int = 2
 
+    /// "Sidechain to <pad>" settings (ducks this bass under a trigger pad).
+    let sidechain = SidechainState()
+    private var sidechainCancellable: AnyCancellable?
+
     let renderer: ACIDBASSRenderer
     let audioPlayer: PadAudioPlayer
 
@@ -94,6 +98,14 @@ final class ACIDBASSSource: PadSource, ObservableObject {
                 if !running { self.sequencer.resetPlayhead() }
             }
         }
+        // Push sidechain settings to the audio-thread renderer on change.
+        sidechainCancellable = sidechain.objectWillChange.sink { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.renderer.setSidechain(self.sidechain.snapshot)
+            }
+        }
+        renderer.setSidechain(sidechain.snapshot)
     }
 
     func tick(timestamp: CFTimeInterval) {
@@ -265,6 +277,20 @@ final class ACIDBASSRenderer: PadStereoRenderer, @unchecked Sendable {
     private var peakValue: Float = 0
     private let recentLock = NSLock()
 
+    // Sidechain: publishes its own mono mix to the bus (so it can be a
+    // trigger for others) and, when enabled, ducks under a trigger pad.
+    var triggerBus: TriggerBus?
+    var busPadIndex: Int = -1
+    private var scSnap = SidechainSnapshot()
+    private let scLock = NSLock()
+    private var scTrig: [Float] = []
+    private var ducker = SidechainDucker()
+    private var scratchPub: [Float] = []
+
+    func setSidechain(_ s: SidechainSnapshot) {
+        scLock.lock(); scSnap = s; scLock.unlock()
+    }
+
     init(voice: TB303Voice) {
         self.voice = voice
         recent = [Float](repeating: 0, count: Self.bufferSize)
@@ -296,12 +322,22 @@ final class ACIDBASSRenderer: PadStereoRenderer, @unchecked Sendable {
             else { voice.noteOff() }
         }
 
+        scLock.lock(); let sc = scSnap; scLock.unlock()
+        let ducking = sc.enabled && sc.triggerPad != nil && triggerBus != nil
+        if ducking {
+            if scTrig.count < count { scTrig = [Float](repeating: 0, count: count) }
+            triggerBus!.readRecent(pad: sc.triggerPad!, into: &scTrig, count: count)
+        }
+
         var blockPeak: Float = 0
+        let sr = Float(sampleRate)
         recentLock.lock()
         var idx = writeIdx
         let ring = Self.bufferSize
         for i in 0..<count {
-            var s = Float(voice.nextSample()) * 0.8   // headroom
+            var s = Float(voice.nextSample())
+            if ducking { s *= ducker.processGain(trigger: scTrig[i], params: sc, sampleRate: sr) }
+            s *= 0.8   // headroom
             if s > 1 { s = 1 } else if s < -1 { s = -1 }
             left[i] = s
             right[i] = s
@@ -313,6 +349,16 @@ final class ACIDBASSRenderer: PadStereoRenderer, @unchecked Sendable {
         writeIdx = idx
         peakValue = blockPeak
         recentLock.unlock()
+
+        publishMono(left: left, right: right, count: count)
+    }
+
+    /// Publish this pad's mono mix so other pads can sidechain to it.
+    private func publishMono(left: UnsafeMutablePointer<Float>, right: UnsafeMutablePointer<Float>, count: Int) {
+        guard let bus = triggerBus, busPadIndex >= 0 else { return }
+        if scratchPub.count < count { scratchPub = [Float](repeating: 0, count: count) }
+        for i in 0..<count { scratchPub[i] = (left[i] + right[i]) * 0.5 }
+        scratchPub.withUnsafeBufferPointer { bus.publish(pad: busPadIndex, samples: $0.baseAddress!, count: count) }
     }
 
     func snapshotRecentSamples() -> [Float] {

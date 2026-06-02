@@ -7,12 +7,16 @@ import SwiftUI
 struct ACIDBASSSettingsSheet: View {
     @ObservedObject var source: ACIDBASSSource
     @ObservedObject var sequencer: BassSequencer
+    @ObservedObject var sidechain: SidechainState
+    let padIndex: Int
     @Environment(\.dismiss) private var dismiss
     @State private var selectedStep: Int? = nil
 
-    init(source: ACIDBASSSource) {
+    init(source: ACIDBASSSource, padIndex: Int) {
         self.source = source
         self.sequencer = source.sequencer
+        self.sidechain = source.sidechain
+        self.padIndex = padIndex
     }
 
     var body: some View {
@@ -31,6 +35,7 @@ struct ACIDBASSSettingsSheet: View {
                         audition: { semi in source.audition(semitoneFromC: semi) }
                     )
                     knobSection
+                    sidechainSection
                     vizSection
                 }
                 .padding(20)
@@ -168,6 +173,59 @@ struct ACIDBASSSettingsSheet: View {
                     .foregroundStyle(.white.opacity(0.5))
             }
             Slider(value: b, in: range).tint(.purple)
+        }
+    }
+
+    // MARK: - Sidechain
+
+    private var sidechainSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("SIDECHAIN")
+                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Text("DUCK UNDER")
+                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.5))
+                Menu {
+                    Button("None") { sidechain.triggerPad = nil; sidechain.enabled = false }
+                    ForEach(0..<9, id: \.self) { j in
+                        if j != padIndex {
+                            Button("PAD \(j + 1)") { sidechain.triggerPad = j; sidechain.enabled = true }
+                        }
+                    }
+                } label: {
+                    Text(sidechain.triggerPad.map { "PAD \($0 + 1)" } ?? "None")
+                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                        .foregroundStyle(sidechain.enabled ? .green : .white.opacity(0.6))
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .overlay(Rectangle().strokeBorder(sidechain.enabled ? Color.green : Color.white.opacity(0.3), lineWidth: 1))
+                }
+            }
+            if sidechain.enabled {
+                scSlider("Amount", $sidechain.amount, 0...1, "%.2f")
+                scSlider("Attack", $sidechain.attackMs, 0.5...100, "%.0f ms")
+                scSlider("Release", $sidechain.releaseMs, 5...1000, "%.0f ms")
+                scSlider("Threshold", $sidechain.thresholdDb, -60...0, "%.0f dB")
+                scSlider("Ratio", $sidechain.ratio, 1...20, "%.1f")
+                scSlider("SC HPF", $sidechain.scHpfHz, 20...1000, "%.0f Hz")
+            }
+        }
+    }
+
+    private func scSlider(_ label: String, _ b: Binding<Float>, _ range: ClosedRange<Float>, _ fmt: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.7))
+                Spacer()
+                Text(String(format: fmt, b.wrappedValue))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            Slider(value: b, in: range).tint(.green)
         }
     }
 

@@ -63,6 +63,15 @@ struct SessionSpec: Codable {
         var decay: Double, accent: Double, waveform: Double, overdrive: Double, glide: Double
         var octave: Int
         var vizWarp: Double, vizHue: Double, vizZoom: Double
+        // Sidechain routing — optional for back-compat.
+        var scEnabled: Bool? = nil
+        var scTriggerPad: Int? = nil
+        var scAmount: Float? = nil
+        var scAttack: Float? = nil
+        var scRelease: Float? = nil
+        var scThreshold: Float? = nil
+        var scRatio: Float? = nil
+        var scHpf: Float? = nil
     }
 
     struct MultiplatesSpec: Codable {
