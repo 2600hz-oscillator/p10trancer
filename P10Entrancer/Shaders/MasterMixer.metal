@@ -113,6 +113,25 @@ static inline half4 sampleAspected(texture2d<half> tex, sampler s,
     return tex.sample(s, uv);
 }
 
+struct NormalizeParams {
+    float canvasAspect;
+    int fillMode;       // 0 = letterbox, 1 = fill (zoom-fit)
+    float _pad0;
+    float _pad1;
+};
+
+// Per-pad normalization: render a source texture into a canvas-AR/res target,
+// applying the pad's fill/letterbox so every pad emits geometry-consistent
+// content (letterbox bars become real black pixels). Reuses mixerVertex.
+fragment half4 normalizeFragment(
+    VOut in [[stage_in]],
+    texture2d<half> src [[texture(0)]],
+    constant NormalizeParams &params [[buffer(0)]]
+) {
+    constexpr sampler s(filter::linear, address::clamp_to_edge);
+    return sampleAspected(src, s, in.uv, params.canvasAspect, params.fillMode);
+}
+
 fragment half4 mixerFragment(
     VOut in [[stage_in]],
     texture2d<half> ch1 [[texture(0)]],

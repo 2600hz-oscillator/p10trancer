@@ -54,13 +54,20 @@ final class GridRenderer: NSObject, FrameRenderer, MTKViewDelegate {
         var params = GridParamsBuffer(cellAspect: cellAspect,
                                       leftMargin: leftMargin,
                                       _pad1: 0, _pad2: 0)
-        var aspects: [Float] = pads.pads.map { $0.aspect }
-        while aspects.count < 9 { aspects.append(16.0 / 9.0) }
-
+        var aspects = [Float](repeating: 16.0 / 9.0, count: 9)
         encoder.setRenderPipelineState(pipeline)
         let blank = context.blankTexture
         for i in 0..<PadSystem.padCount {
-            encoder.setFragmentTexture(pads.pads[i].texture ?? blank, index: i)
+            // Prefer the normalized (canvas-framed) texture so the thumbnail
+            // matches the output framing and updates on AR change; its aspect
+            // is the canvas aspect. Fall back to the raw source pre-normalize.
+            let tex = pads.pads[i].normalizedTexture ?? pads.pads[i].texture
+            encoder.setFragmentTexture(tex ?? blank, index: i)
+            if let t = tex {
+                aspects[i] = Float(t.width) / Float(max(t.height, 1))
+            } else {
+                aspects[i] = pads.pads[i].aspect
+            }
         }
         encoder.setFragmentBytes(&params, length: MemoryLayout<GridParamsBuffer>.size, index: 0)
         encoder.setFragmentBytes(&aspects, length: MemoryLayout<Float>.size * 9, index: 1)

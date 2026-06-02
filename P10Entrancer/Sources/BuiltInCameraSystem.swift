@@ -173,9 +173,13 @@ final class BuiltInCameraSystem {
 @MainActor
 final class BuiltInCameraSource: NSObject, PadSource {
     private(set) var currentTexture: MTLTexture?
-    let displayAspect: Float = CameraCrop4x3.aspect
+    /// True aspect of the full sensor frame; per-pad normalization fits it to
+    /// the output geometry, so no crop is applied here.
+    var displayAspect: Float {
+        guard let t = currentTexture, t.height > 0 else { return 16.0 / 9.0 }
+        return Float(t.width) / Float(t.height)
+    }
     let audioPlayer: PadAudioPlayer
-    private let crop = CameraCrop4x3()
 
     fileprivate let label: String
     fileprivate var delegate: BuiltInFrameReceiver!
@@ -209,10 +213,10 @@ final class BuiltInCameraSource: NSObject, PadSource {
         guard status == kCVReturnSuccess, let cvTex = cvTex,
               let raw = CVMetalTextureGetTexture(cvTex) else { return }
         if currentTexture == nil {
-            print("[BuiltInCameraSource:\(label)] first frame \(w)x\(h) → 4:3 cropped")
+            print("[BuiltInCameraSource:\(label)] first frame \(w)x\(h) (full sensor frame)")
         }
         retainedCVTexture = cvTex
-        currentTexture = crop.crop(raw) ?? raw
+        currentTexture = raw
     }
 }
 

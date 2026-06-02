@@ -14,10 +14,15 @@ final class MasterMixerOffscreen: FrameRenderer {
     private let ntscPipeline: NTSCPipeline
     private let hdPostPipeline: HDPostPipeline
     private let pipeline: MTLRenderPipelineState
+    private let normalizePipeline: MTLRenderPipelineState
     weak var recorder: MixerRecorder?
 
     private var lastSize: (Int, Int) = (0, 0)
     private var renderTexture: MTLTexture?
+    /// Per-pad canvas-AR/res normalized textures (one per pad), reallocated
+    /// on canvas-size change.
+    private var normalizedTextures: [MTLTexture?] = []
+    private var normLastSize: (Int, Int) = (0, 0)
 
     init(pads: PadSystem,
          mixer: MixerState,
@@ -38,6 +43,11 @@ final class MasterMixerOffscreen: FrameRenderer {
             fragment: "mixerFragment",
             pixelFormat: .bgra8Unorm
         )
+        self.normalizePipeline = try context.makePipeline(
+            vertex: "mixerVertex",
+            fragment: "normalizeFragment",
+            pixelFormat: .bgra8Unorm
+        )
         // Wire the source resolvers AFTER all renderers exist so the
         // graph can resolve cycles (keyer → keyer, feedback → keyer,
         // xyz → keyer, etc.) by reading each unit's last-frame
@@ -47,7 +57,7 @@ final class MasterMixerOffscreen: FrameRenderer {
             switch ref {
             case .pad(let i):
                 guard self.pads.pads.indices.contains(i) else { return nil }
-                return self.pads.pads[i].texture
+                return self.pads.pads[i].normalizedTexture ?? self.pads.pads[i].texture
             case .keyer:
                 return self.keyer.outputTexture
             case .feedback:
@@ -75,11 +85,17 @@ final class MasterMixerOffscreen: FrameRenderer {
         // feedback gets fresh data), then keyer, then xyz. Self-references
         // through pads still work via 1-frame feedback because each
         // renderer publishes a stable outputTexture pointer.
+        let canvasSize = mixer.canvasSize
+        let canvasAspect = mixer.canvasAspect
+        // Normalize every pad to canvas AR/res BEFORE the FX units render so
+        // keyer/feedback/xyz and the composite all consume geometry-consistent
+        // textures (letterbox bars become real black pixels for luma-fill).
+        normalizePads(width: canvasSize.width, height: canvasSize.height, canvasAspect: canvasAspect)
+
         feedback.render()
         keyer.render()
         xyz.render()
 
-        let canvasSize = mixer.canvasSize
         if (canvasSize.width, canvasSize.height) != lastSize {
             renderTexture = makeRenderTexture(width: canvasSize.width, height: canvasSize.height)
             lastSize = (canvasSize.width, canvasSize.height)
@@ -98,7 +114,6 @@ final class MasterMixerOffscreen: FrameRenderer {
         let ch1Tex = textureForChannel(mixer.ch1Source) ?? blank
         let ch2Tex = textureForChannel(mixer.ch2Source) ?? blank
 
-        let canvasAspect = mixer.canvasAspect
         var params = MixerParamsBuffer(
             kind: Int32(mixer.transition.rawValue),
             position: mixer.position,
@@ -154,7 +169,7 @@ final class MasterMixerOffscreen: FrameRenderer {
         switch source {
         case .pad(let index):
             guard pads.pads.indices.contains(index) else { return nil }
-            return pads.pads[index].texture
+            return pads.pads[index].normalizedTexture ?? pads.pads[index].texture
         case .keyer:
             return keyer.outputTexture
         case .feedback:
@@ -162,6 +177,43 @@ final class MasterMixerOffscreen: FrameRenderer {
         case .xyz:
             return xyz.outputTexture
         }
+    }
+
+    /// Render each pad's texture into a canvas-AR/res target with its
+    /// fill/letterbox applied, and publish it as pad.normalizedTexture.
+    private func normalizePads(width: Int, height: Int, canvasAspect: Float) {
+        guard width > 0, height > 0 else { return }
+        if (width, height) != normLastSize {
+            normalizedTextures = (0..<PadSystem.padCount).map { _ in
+                makeRenderTexture(width: width, height: height)
+            }
+            normLastSize = (width, height)
+        }
+        guard let cmd = context.commandQueue.makeCommandBuffer() else { return }
+        for i in pads.pads.indices {
+            guard normalizedTextures.indices.contains(i),
+                  let dst = normalizedTextures[i],
+                  let src = pads.pads[i].texture else {
+                if pads.pads.indices.contains(i) { pads.pads[i].normalizedTexture = nil }
+                continue
+            }
+            let descriptor = MTLRenderPassDescriptor()
+            descriptor.colorAttachments[0].texture = dst
+            descriptor.colorAttachments[0].loadAction = .dontCare
+            descriptor.colorAttachments[0].storeAction = .store
+            guard let encoder = cmd.makeRenderCommandEncoder(descriptor: descriptor) else { continue }
+            var params = NormalizeParamsBuffer(
+                canvasAspect: canvasAspect,
+                fillMode: pads.pads[i].fillMode == .fill ? 1 : 0,
+                _pad0: 0, _pad1: 0)
+            encoder.setRenderPipelineState(normalizePipeline)
+            encoder.setFragmentTexture(src, index: 0)
+            encoder.setFragmentBytes(&params, length: MemoryLayout<NormalizeParamsBuffer>.size, index: 0)
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+            encoder.endEncoding()
+            pads.pads[i].normalizedTexture = dst
+        }
+        cmd.commit()
     }
 
     private func makeRenderTexture(width: Int, height: Int) -> MTLTexture? {
@@ -175,6 +227,13 @@ final class MasterMixerOffscreen: FrameRenderer {
         desc.storageMode = .private
         return context.device.makeTexture(descriptor: desc)
     }
+}
+
+private struct NormalizeParamsBuffer {
+    var canvasAspect: Float
+    var fillMode: Int32
+    var _pad0: Float
+    var _pad1: Float
 }
 
 private struct MixerParamsBuffer {

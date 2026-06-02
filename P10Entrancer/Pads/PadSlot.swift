@@ -45,6 +45,13 @@ final class PadSlot: ObservableObject {
         return source?.currentTexture
     }
 
+    /// Canvas-AR/resolution version of `texture` with this pad's fill/letterbox
+    /// baked in (letterbox bars are real black pixels). Produced each frame by
+    /// the mixer's per-pad normalization stage so keyer/XYZ/feedback/composite
+    /// all consume geometry-consistent content. nil before the first normalize
+    /// or when the pad has no source.
+    var normalizedTexture: MTLTexture?
+
     var aspect: Float { source?.displayAspect ?? (16.0 / 9.0) }
 
     var audioPlayer: PadAudioPlayer? {
