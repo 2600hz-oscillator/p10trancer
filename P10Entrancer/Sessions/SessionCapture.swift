@@ -177,6 +177,10 @@ enum SessionCapture {
         var bundledIndex: Int? = nil
         var userVideoBasename: String? = nil
         var cameraID: String? = nil
+        var acidkickSpec: SessionSpec.ACIDKICKSpec? = nil
+        var acidbassSpec: SessionSpec.ACIDBASSSpec? = nil
+        var multiplatesSpec: SessionSpec.MultiplatesSpec? = nil
+        var wavetableSpec: SessionSpec.WavetableInstSpec? = nil
         if let source = pad.source {
             if let v = source as? VideoFileSource {
                 if let bundleIdx = bundledPadIndex(for: v.url) {
@@ -195,6 +199,42 @@ enum SessionCapture {
                 kind = .keyer
             } else if source is MasterFeedbackSource {
                 kind = .masterFeedback
+            } else if let kick = source as? ACIDKICKSource {
+                kind = .acidkick
+                acidkickSpec = SessionSpec.ACIDKICKSpec(
+                    tracks: kick.sequencer.tracks,
+                    voiceParams: kick.voices.map { [$0.pitchMul, $0.decayMul, $0.bitcrush] })
+            } else if let bass = source as? ACIDBASSSource {
+                kind = .acidbass
+                let v = bass.voice
+                acidbassSpec = SessionSpec.ACIDBASSSpec(
+                    steps: bass.sequencer.steps,
+                    tune: v.tuneSemitones, cutoff: v.cutoffHz, resonance: v.resonance,
+                    envMod: v.envAmount01, decay: v.decayMs, accent: v.accentAmount01,
+                    waveform: v.waveform, overdrive: v.overdrive, glide: v.glideTime,
+                    octave: bass.octave,
+                    vizWarp: bass.vizWarpSpeed, vizHue: bass.vizHueSpeed, vizZoom: bass.vizZoom)
+            } else if let multi = source as? MultiplatesSource {
+                kind = .multiplates
+                let v = multi.voice
+                multiplatesSpec = SessionSpec.MultiplatesSpec(
+                    steps: multi.sequencer.steps,
+                    harmonics: v.harmonics, timbre: v.timbre, morph: v.morph, level: v.level,
+                    octave: multi.octave,
+                    vizWarp: multi.vizWarpSpeed, vizHue: multi.vizHueSpeed, vizZoom: multi.vizZoom)
+            } else if let inst = source as? InstrumentSource {
+                kind = .wavetable
+                wavetableSpec = SessionSpec.WavetableInstSpec(
+                    steps: inst.sequencer.steps,
+                    tune: inst.synth.tune, fine: inst.synth.fine, morph: inst.synth.morph,
+                    spread: inst.synth.spread, fold: inst.synth.fold,
+                    attack: inst.adsr.attack, decay: inst.adsr.decay,
+                    sustain: inst.adsr.sustain, release: inst.adsr.release,
+                    filterCutoff: inst.filter.cutoffHz, filterResonance: inst.filter.resonance,
+                    filterMode: inst.filter.mode.rawValue,
+                    reverbSize: inst.reverb.size, reverbDamp: inst.reverb.damp, reverbWet: inst.reverb.wet,
+                    octave: inst.octave, wavetableLabel: inst.wavetableLabel,
+                    vizZoom: inst.vizZoom, vizRotation: inst.vizRotation, vizColorCycle: inst.vizColorCycle)
             } else {
                 kind = .empty
             }
@@ -209,7 +249,11 @@ enum SessionCapture {
             cameraID: cameraID,
             keyerIndex: nil,
             fx: fxSpec,
-            fillMode: pad.fillMode
+            fillMode: pad.fillMode,
+            acidkick: acidkickSpec,
+            acidbass: acidbassSpec,
+            multiplates: multiplatesSpec,
+            wavetable: wavetableSpec
         )
     }
 
@@ -243,6 +287,58 @@ enum SessionCapture {
             appState.setKeyerSource(at: i)
         case .masterFeedback:
             appState.setMasterFeedbackSource(at: i)
+        case .acidkick:
+            appState.setACIDKICKSource(at: i)
+            if let s = spec.acidkick, let kick = appState.pads.pads[i].source as? ACIDKICKSource {
+                kick.sequencer.tracks = s.tracks   // a voiceType change rebuilds voices async,
+                let params = s.voiceParams         // so restore voice params on the next turn.
+                Task { @MainActor in
+                    for (vi, p) in params.enumerated() where kick.voices.indices.contains(vi) && p.count >= 3 {
+                        kick.voices[vi].pitchMul = p[0]
+                        kick.voices[vi].decayMul = p[1]
+                        kick.voices[vi].bitcrush = p[2]
+                    }
+                }
+            }
+        case .acidbass:
+            appState.setACIDBASSSource(at: i)
+            if let s = spec.acidbass, let bass = appState.pads.pads[i].source as? ACIDBASSSource {
+                bass.sequencer.steps = s.steps
+                let v = bass.voice
+                v.tuneSemitones = s.tune; v.cutoffHz = s.cutoff; v.resonance = s.resonance
+                v.envAmount01 = s.envMod; v.decayMs = s.decay; v.accentAmount01 = s.accent
+                v.waveform = s.waveform; v.overdrive = s.overdrive; v.glideTime = s.glide
+                bass.octave = s.octave
+                bass.vizWarpSpeed = s.vizWarp; bass.vizHueSpeed = s.vizHue; bass.vizZoom = s.vizZoom
+            }
+        case .multiplates:
+            appState.setMultiplatesSource(at: i)
+            if let s = spec.multiplates, let multi = appState.pads.pads[i].source as? MultiplatesSource {
+                multi.sequencer.steps = s.steps
+                let v = multi.voice
+                v.harmonics = s.harmonics; v.timbre = s.timbre; v.morph = s.morph; v.level = s.level
+                multi.octave = s.octave
+                multi.vizWarpSpeed = s.vizWarp; multi.vizHueSpeed = s.vizHue; multi.vizZoom = s.vizZoom
+            }
+        case .wavetable:
+            appState.setInstrumentSource(at: i)
+            if let s = spec.wavetable, let inst = appState.pads.pads[i].source as? InstrumentSource {
+                inst.sequencer.steps = s.steps
+                inst.synth.tune = s.tune; inst.synth.fine = s.fine; inst.synth.morph = s.morph
+                inst.synth.spread = s.spread; inst.synth.fold = s.fold
+                inst.adsr.attack = s.attack; inst.adsr.decay = s.decay
+                inst.adsr.sustain = s.sustain; inst.adsr.release = s.release
+                inst.filter.cutoffHz = s.filterCutoff; inst.filter.resonance = s.filterResonance
+                inst.filter.mode = WaspFilter.Mode(rawValue: s.filterMode) ?? .lowpass
+                inst.reverb.size = s.reverbSize; inst.reverb.damp = s.reverbDamp; inst.reverb.wet = s.reverbWet
+                inst.octave = s.octave
+                inst.vizZoom = s.vizZoom; inst.vizRotation = s.vizRotation; inst.vizColorCycle = s.vizColorCycle
+                if s.wavetableLabel == "DEFAULT" {
+                    inst.loadTable(WaveCelSynth.defaultTable())
+                } else if let t = WaveCelTableLoader.loadBundled(s.wavetableLabel) {
+                    inst.loadTable(t)
+                }
+            }
         case .empty:
             appState.pads.setSource(nil, at: i)
         }

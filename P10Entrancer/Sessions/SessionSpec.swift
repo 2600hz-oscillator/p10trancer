@@ -23,6 +23,7 @@ struct SessionSpec: Codable {
 
     enum PadSourceKind: String, Codable {
         case bundled, userVideo, camera, keyer, masterFeedback, empty
+        case acidkick, acidbass, multiplates, wavetable
     }
 
     struct PadSpec: Codable {
@@ -40,8 +41,46 @@ struct SessionSpec: Codable {
         var fx: FXChainSpec
         /// Aspect-handling for when this pad is routed to a channel.
         /// Optional for back-compat with sessions saved before this
-        /// field existed — nil decodes to .letterbox.
+        /// field existed — nil decodes to .fill.
         var fillMode: PadFillMode? = nil
+        /// Instrument patches — present only for the matching `kind`, nil
+        /// otherwise. Optional ⇒ pre-instrument-persistence sessions decode
+        /// to nil and the instrument restores at defaults.
+        var acidkick: ACIDKICKSpec? = nil
+        var acidbass: ACIDBASSSpec? = nil
+        var multiplates: MultiplatesSpec? = nil
+        var wavetable: WavetableInstSpec? = nil
+    }
+
+    struct ACIDKICKSpec: Codable {
+        var tracks: [DrumSequencer.Track]      // voiceType + 16 step bools
+        var voiceParams: [[Float]]             // per track: [pitchMul, decayMul, bitcrush]
+    }
+
+    struct ACIDBASSSpec: Codable {
+        var steps: [BassSequencer.Step]
+        var tune: Double, cutoff: Double, resonance: Double, envMod: Double
+        var decay: Double, accent: Double, waveform: Double, overdrive: Double, glide: Double
+        var octave: Int
+        var vizWarp: Double, vizHue: Double, vizZoom: Double
+    }
+
+    struct MultiplatesSpec: Codable {
+        var steps: [MultiplatesSequencer.Step]
+        var harmonics: Double, timbre: Double, morph: Double, level: Double
+        var octave: Int
+        var vizWarp: Double, vizHue: Double, vizZoom: Double
+    }
+
+    struct WavetableInstSpec: Codable {
+        var steps: [StepSequencer.Step]
+        var tune: Float, fine: Float, morph: Float, spread: Float, fold: Float
+        var attack: Float, decay: Float, sustain: Float, release: Float
+        var filterCutoff: Float, filterResonance: Float, filterMode: Int
+        var reverbSize: Float, reverbDamp: Float, reverbWet: Float
+        var octave: Int
+        var wavetableLabel: String
+        var vizZoom: Float, vizRotation: Float, vizColorCycle: Float
     }
 
     struct FXChainSpec: Codable {
