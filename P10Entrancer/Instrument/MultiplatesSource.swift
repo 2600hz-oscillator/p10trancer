@@ -295,16 +295,15 @@ final class MultiplatesRenderer: PadStereoRenderer, @unchecked Sendable {
             }
         }
 
+        // DSP + envelope run OUTSIDE the lock; the lock only guards the ring
+        // copy + peak/index publish (keeps the realtime thread off a
+        // main-thread-held lock).
         if scratch.count < count { scratch = [Float](repeating: 0, count: count) }
         for i in 0..<count { scratch[i] = Float(voice.nextSample()) }
         scratch.withUnsafeMutableBufferPointer { p in
             adsr.applyBlock(buffer: p.baseAddress!, count: count, sampleRate: sampleRate)
         }
-
         var blockPeak: Float = 0
-        recentLock.lock()
-        var idx = writeIdx
-        let ring = Self.bufferSize
         for i in 0..<count {
             var s = scratch[i] * 0.8
             if s > 1 { s = 1 } else if s < -1 { s = -1 }
@@ -312,9 +311,11 @@ final class MultiplatesRenderer: PadStereoRenderer, @unchecked Sendable {
             right[i] = s
             let a = abs(s)
             if a > blockPeak { blockPeak = a }
-            recent[idx] = s
-            idx = (idx + 1) % ring
         }
+        recentLock.lock()
+        var idx = writeIdx
+        let ring = Self.bufferSize
+        for i in 0..<count { recent[idx] = left[i]; idx = (idx + 1) % ring }
         writeIdx = idx
         peakValue = blockPeak
         recentLock.unlock()

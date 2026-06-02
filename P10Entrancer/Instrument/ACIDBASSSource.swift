@@ -342,11 +342,12 @@ final class ACIDBASSRenderer: PadStereoRenderer, @unchecked Sendable {
             triggerBus!.readRecent(pad: sc.triggerPad!, into: &scTrig, count: count)
         }
 
+        // DSP runs OUTSIDE the lock (audio-thread-only state); the lock is
+        // taken only to copy the block into the visualizer ring + publish
+        // peak/index together, so the realtime thread can't be stalled by the
+        // main thread holding the lock across a whole DSP block.
         var blockPeak: Float = 0
         let sr = Float(sampleRate)
-        recentLock.lock()
-        var idx = writeIdx
-        let ring = Self.bufferSize
         for i in 0..<count {
             var s = Float(voice.nextSample())
             if ducking { s *= ducker.processGain(trigger: scTrig[i], params: sc, sampleRate: sr) }
@@ -356,9 +357,11 @@ final class ACIDBASSRenderer: PadStereoRenderer, @unchecked Sendable {
             right[i] = s
             let a = abs(s)
             if a > blockPeak { blockPeak = a }
-            recent[idx] = s
-            idx = (idx + 1) % ring
         }
+        recentLock.lock()
+        var idx = writeIdx
+        let ring = Self.bufferSize
+        for i in 0..<count { recent[idx] = left[i]; idx = (idx + 1) % ring }
         writeIdx = idx
         peakValue = blockPeak
         recentLock.unlock()
