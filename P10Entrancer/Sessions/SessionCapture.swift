@@ -256,8 +256,9 @@ enum SessionCapture {
                 target.parameters[paramIndex].value = value
             }
         }
-        // Fill mode — defaults to letterbox if absent (legacy session).
-        appState.pads.pads[i].fillMode = spec.fillMode ?? .letterbox
+        // Fill mode — defaults to .fill (zoom-fit) if absent, matching the
+        // new per-pad default from the output-geometry redesign.
+        appState.pads.pads[i].fillMode = spec.fillMode ?? .fill
     }
 
     private static func encodeChannel(_ source: ChannelSource) -> SessionSpec.MixerSpec.Source {

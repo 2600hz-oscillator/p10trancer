@@ -314,7 +314,7 @@ struct PadGridView: View {
                     }
             // Top-right fill / letterbox toggle. Tap flips PadFillMode;
             // master mixer's aspect transform picks it up.
-            PadFillModeToggle(pad: pads.pads[index])
+            PadFillModeToggle(pad: pads.pads[index], outputAspect: mixer.outputGeometry.aspect)
                 .padding(.top, 6)
                 .padding(.trailing, 6)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)

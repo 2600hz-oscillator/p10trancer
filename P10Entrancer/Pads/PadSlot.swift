@@ -27,9 +27,11 @@ final class PadSlot: ObservableObject {
     @Published var source: PadSource?
     let fxChain: FXChain
     /// Aspect-handling mode used when this pad is routed to CH1/CH2.
-    /// Defaults to letterbox so users never see distorted content
-    /// the first time a non-canvas-aspect source is routed.
-    @Published var fillMode: PadFillMode = .letterbox
+    /// Defaults to .fill (zoom-fit / cover-crop) per the output-geometry
+    /// redesign: pads fill the canvas by default; the top-right toggle
+    /// switches to letterbox (show all content with black bars). Neither
+    /// mode ever distorts the source aspect.
+    @Published var fillMode: PadFillMode = .fill
 
     init(index: Int, fxChain: FXChain) {
         self.index = index
