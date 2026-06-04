@@ -17,24 +17,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from asc_testflight import ASC, BUNDLE_ID  # noqa: E402
 
-VERSION_STRING = "2.0.1"
-BUILD_VERSION = "1"
+VERSION_STRING = "2.0.2"
+BUILD_VERSION = "2"
 PLATFORM = "IOS"
 WHATS_NEW = """\
-Bug fixes and refinements:
+This update is mostly bug fixes and improvements, plus a few new toys.
 
-• Per-pad mute, volume, and VU now work on instrument pads (previously stuck even though audio was audible).
-• 'End Session?' alert no longer pops up on cold launch.
-• FX pad thumbnails (keyer / feedback) render smoothly — no more jitter or first-frame slash artifact on launch.
+Improvements:
 
-New and improved:
+• Reworked output: choose 4:3 or 16:9 with per-aspect resolution options, and scale each pad with zoom-to-fill or letterbox. Cameras now use the full sensor frame.
+• Color grade and the analog look are now a single, simpler set of output FX.
+• New instruments: an ACIDBASS bass synth (with kick-to-bass sidechain ducking) and a 14-engine MULTIPLATES macro synth, plus a bigger 46-wave bank for WAVETABLE.
+• Play instruments live over MIDI, and tweak the feedback wet/dry mix.
 
-• X/Y joystick macro — a two-axis assignable control mapped to any pair of LFO targets.
-• Per-pad letterbox / fill toggle so each source fits the pad the way you want.
-• HD output post-processing with new side-strip FX panels.
-• Per-pad VU meter and volume slider; mini VU on camera and mic pads.
-• Per-pad gear menu + a global settings sheet (thumbnail quality, NTSC, MIDI).
-• In-app share for live clips; Documents / UserVideos exposed via the Files app.
+Fixes:
+
+• Recordings now fill the whole frame at every output size.
+• Fixed instrument tempo drifting under load and instrument knobs that wouldn't drag.
+• Instrument patches and patterns now save and reload with your sessions.
 """
 
 
@@ -67,18 +67,31 @@ def find_or_create_app_store_version(asc, app_id):
     return asc.post("/appStoreVersions", json=body)["data"]
 
 
-def find_build(asc, app_id, build_version):
-    builds = asc.get(
+def find_build(asc, app_id, build_version, marketing_version):
+    """Find the build by CFBundleVersion AND marketing version.
+
+    CFBundleVersion is NOT unique across marketing versions (e.g. both
+    2.0.0 build 2 and 2.0.2 build 2 look like version=2 to the /builds
+    filter), so we must disambiguate via the preReleaseVersion include or
+    we risk attaching the wrong binary to the App Store version.
+    """
+    data = asc.get(
         "/builds",
         params={
             "filter[app]": app_id,
             "filter[version]": build_version,
-            "limit": 1,
+            "sort": "-uploadedDate",
+            "limit": 10,
+            "include": "preReleaseVersion",
         },
-    )["data"]
-    if not builds:
-        raise SystemExit(f"build {build_version} not found")
-    return builds[0]
+    )
+    included = {x["id"]: x for x in data.get("included", [])}
+    for b in data["data"]:
+        pvid = b.get("relationships", {}).get("preReleaseVersion", {}).get("data", {})
+        pv = included.get(pvid.get("id"), {}).get("attributes", {}).get("version", "") if pvid else ""
+        if pv == marketing_version:
+            return b
+    raise SystemExit(f"build {marketing_version}({build_version}) not found among version={build_version} builds")
 
 
 def attach_build(asc, version_id, build_id):
@@ -171,18 +184,27 @@ def submit_for_review(asc, app_id, version_id):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--no-submit", action="store_true",
+                    help="Create/attach/set whatsNew but do NOT post the review submission (for verifying readiness first).")
+    args = ap.parse_args()
+
     asc = ASC()
     app_id = asc.app_id_for_bundle(BUNDLE_ID)
     print(f"[asc] app id = {app_id}")
 
-    build = find_build(asc, app_id, BUILD_VERSION)
-    print(f"[asc] build {build['id'][:8]}… version={BUILD_VERSION} processingState={build['attributes'].get('processingState')}")
+    build = find_build(asc, app_id, BUILD_VERSION, VERSION_STRING)
+    print(f"[asc] build {build['id']} {VERSION_STRING}({BUILD_VERSION}) processingState={build['attributes'].get('processingState')}")
 
     version = find_or_create_app_store_version(asc, app_id)
     version_id = version["id"]
 
     attach_build(asc, version_id, build["id"])
     set_whats_new(asc, version_id)
+    if args.no_submit:
+        print("[asc] --no-submit set; prepared draft but did NOT submit for review.")
+        return
     submit_for_review(asc, app_id, version_id)
 
 
