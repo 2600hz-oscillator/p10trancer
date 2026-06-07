@@ -1,15 +1,77 @@
 import UIKit
 import MetalKit
+#if DEBUG
+import Combine
+#endif
 
 @MainActor
 final class ExternalDisplaySceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
     private var presenter: ScreenPresenter?
+    private weak var owningScene: UIWindowScene?
+    #if DEBUG
+    private var presentationCancellable: AnyCancellable?
+    #endif
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
+        self.owningScene = windowScene
         print("[ExternalDisplay] connecting, screen size: \(windowScene.screen.bounds.size)")
 
+        AppState.shared.startIfNeeded()
+
+        #if DEBUG
+        // Presentation mode mirrors the whole iPad UI to HDMI. The OS
+        // mirrors an external scene only while we DON'T own a window on it;
+        // creating one (program-out) kicks it out of mirroring. So we map
+        // presentation-mode → no window (mirror), normal → program-out
+        // window, and flip live as the toggle changes (no reconnect).
+        presentationCancellable = AppState.shared.$presentationModeEnabled
+            .removeDuplicates()
+            .sink { [weak self] present in
+                self?.applyExternalContent(presentationMode: present)
+            }
+        applyExternalContent(presentationMode: AppState.shared.presentationModeEnabled)
+        #else
+        showProgramOut(on: windowScene)
+        #endif
+
+        print("[ExternalDisplay] window ready: \(window?.bounds.size as Any)")
+    }
+
+    func sceneDidDisconnect(_ scene: UIScene) {
+        print("[ExternalDisplay] disconnected")
+        teardownWindow()
+        owningScene = nil
+        #if DEBUG
+        presentationCancellable = nil
+        #endif
+    }
+
+    #if DEBUG
+    private func applyExternalContent(presentationMode: Bool) {
+        guard let windowScene = owningScene else { return }
+        if presentationMode {
+            // Drop our window → scene falls back to system hardware mirroring
+            // of the whole iPad UI (incl. the neon touch overlay).
+            teardownWindow()
+        } else if window == nil {
+            showProgramOut(on: windowScene)
+        }
+    }
+    #endif
+
+    /// Releasing the presenter is enough to stop it rendering: RenderEngine
+    /// holds renderers weakly and prunes dead ones each tick. Niling the
+    /// window releases the MTKView (held weakly by the presenter).
+    private func teardownWindow() {
+        presenter = nil
+        window?.isHidden = true
+        window = nil
+    }
+
+    private func showProgramOut(on windowScene: UIWindowScene) {
+        guard window == nil else { return }
         Self.applyPreferredMode(to: windowScene)
 
         let window = UIWindow(windowScene: windowScene)
@@ -43,7 +105,6 @@ final class ExternalDisplaySceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.isHidden = false
 
         let appState = AppState.shared
-        appState.startIfNeeded()
         let presenter = try! ScreenPresenter(mixerOffscreen: appState.masterMixerOffscreen)
         presenter.attach(view: mtkView)
         RenderEngine.shared.register(presenter)
@@ -51,13 +112,6 @@ final class ExternalDisplaySceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         self.window = window
         self.presenter = presenter
-        print("[ExternalDisplay] window ready at \(window.bounds.size)")
-    }
-
-    func sceneDidDisconnect(_ scene: UIScene) {
-        print("[ExternalDisplay] disconnected")
-        presenter = nil
-        window = nil
     }
 
     private static func applyPreferredMode(to windowScene: UIWindowScene) {

@@ -19,6 +19,9 @@ struct GlobalSettingsSheet: View {
         case performance = "PERFORMANCE"
         case output = "OUTPUT"
         case midi = "MIDI"
+        #if DEBUG
+        case presentation = "PRESENT"
+        #endif
         var id: String { rawValue }
     }
 
@@ -34,6 +37,9 @@ struct GlobalSettingsSheet: View {
                     case .performance: performanceSection
                     case .output: outputSection
                     case .midi: midiSection
+                    #if DEBUG
+                    case .presentation: presentationSection
+                    #endif
                     }
                 }
                 .padding(20)
@@ -205,6 +211,35 @@ struct GlobalSettingsSheet: View {
             }
         }
     }
+
+    // MARK: - Presentation (DEBUG only)
+
+    #if DEBUG
+    private var presentationSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            sectionHeader("PRESENTATION MODE")
+            Button(action: { appState.presentationModeEnabled.toggle() }) {
+                let on = appState.presentationModeEnabled
+                HStack(spacing: 10) {
+                    Image(systemName: on ? "largecircle.fill.circle" : "circle")
+                    Text(on ? "PRESENTATION MODE: ON" : "ENTER PRESENTATION MODE")
+                    Spacer()
+                }
+                .font(.system(size: 13, weight: .heavy, design: .monospaced))
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .padding(.horizontal, 14)
+                .foregroundStyle(on ? .black : .white)
+                .background(on ? Color(red: 0.16, green: 0.74, blue: 1.0) : Color.white.opacity(0.06))
+                .overlay(Rectangle().strokeBorder(Color.white.opacity(0.2), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            Text("For recording training videos. Mirrors the ENTIRE iPad screen to a connected HDMI display (instead of the program-out video) and draws neon-blue rings wherever you touch — taps ripple and vanish, holds/drags track your finger. Debug builds only; never shipped.")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.5))
+        }
+    }
+    #endif
 
     // MARK: - Helpers
 

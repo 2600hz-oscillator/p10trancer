@@ -19,6 +19,20 @@ final class AppState: ObservableObject {
     /// pad visualizers.
     @Published var thumbnailQuality: ThumbnailQuality = .high
 
+    #if DEBUG
+    /// Dev-only presentation mode for recording training videos. When on,
+    /// the external/HDMI scene drops its program-out window so iOS
+    /// hardware-mirrors the whole iPad UI, and a neon touch overlay shows
+    /// where the screen is being tapped/dragged (also mirrored). Excluded
+    /// from Release entirely — see Presentation/PresentationMode.swift.
+    @Published var presentationModeEnabled: Bool = false {
+        didSet {
+            guard presentationModeEnabled != oldValue else { return }
+            PresentationMode.shared.setEnabled(presentationModeEnabled)
+        }
+    }
+    #endif
+
     let pads = PadSystem()
     let mixer = MixerState()
     let keyerSystem = KeyerSystem()
